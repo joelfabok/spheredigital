@@ -96,6 +96,9 @@ export default function Admin() {
     slug: '',
     description: '',
     imageUrl: '',
+    downloadUrl: '',
+    previewUrl: '',
+    previewHtml: '',
     category: 'website',
     price: '',
     salePrice: '',
@@ -108,6 +111,7 @@ export default function Admin() {
     projectPrimary: 'idle',
     projectGallery: 'idle',
     templateImage: 'idle',
+    templateHtml: 'idle',
     error: ''
   });
 
@@ -193,6 +197,9 @@ export default function Admin() {
         slug: templateForm.slug,
         description: templateForm.description,
         imageUrl: normalizeImageUrl(templateForm.imageUrl),
+        downloadUrl: templateForm.downloadUrl,
+        previewUrl: templateForm.previewUrl,
+        previewHtml: templateForm.previewHtml,
         category: templateForm.category,
         price: Number(templateForm.price),
         salePrice: templateForm.salePrice ? Number(templateForm.salePrice) : undefined,
@@ -207,7 +214,7 @@ export default function Admin() {
       const refreshed = await getAdminTemplates();
       setTemplates(refreshed.data || []);
       setTemplateForm({
-        name: '', slug: '', description: '', imageUrl: '', category: 'website', price: '', salePrice: '', onSale: false, active: true, features: ''
+        name: '', slug: '', description: '', imageUrl: '', downloadUrl: '', previewUrl: '', previewHtml: '', category: 'website', price: '', salePrice: '', onSale: false, active: true, features: ''
       });
       setTemplateStatus('saved');
       setTimeout(() => setTemplateStatus('idle'), 1800);
@@ -409,6 +416,30 @@ export default function Admin() {
       setTimeout(() => setUploadState(prev => ({ ...prev, templateImage: 'idle' })), 1800);
     } catch (err) {
       setUploadState(prev => ({ ...prev, templateImage: 'error', error: err.message || 'Could not upload template image.' }));
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleTemplateHtmlUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.html')) {
+      setUploadState(prev => ({ ...prev, templateHtml: 'error', error: 'Please select a .html file for template preview.' }));
+      event.target.value = '';
+      return;
+    }
+
+    setUploadState(prev => ({ ...prev, templateHtml: 'uploading', error: '' }));
+
+    try {
+      const fileContent = await file.text();
+      setTemplateForm(prev => ({ ...prev, previewHtml: fileContent }));
+      setUploadState(prev => ({ ...prev, templateHtml: 'done' }));
+      setTimeout(() => setUploadState(prev => ({ ...prev, templateHtml: 'idle' })), 1800);
+    } catch {
+      setUploadState(prev => ({ ...prev, templateHtml: 'error', error: 'Could not read HTML file.' }));
     } finally {
       event.target.value = '';
     }
@@ -726,6 +757,14 @@ export default function Admin() {
                   <label>Description</label>
                   <input value={templateForm.description} onChange={(e) => setTemplateForm(prev => ({ ...prev, description: e.target.value }))} placeholder="Describe the template and ideal customer" />
                 </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Download URL</label>
+                  <input value={templateForm.downloadUrl} onChange={(e) => setTemplateForm(prev => ({ ...prev, downloadUrl: e.target.value }))} placeholder="https://.../template.zip" />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Preview URL (optional)</label>
+                  <input value={templateForm.previewUrl} onChange={(e) => setTemplateForm(prev => ({ ...prev, previewUrl: e.target.value }))} placeholder="https://.../index.html" />
+                </div>
                 <div className="form-group">
                   <label>Image URL</label>
                   <input value={templateForm.imageUrl} onChange={(e) => setTemplateForm(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="https://... (Google Drive share links supported)" />
@@ -739,6 +778,24 @@ export default function Admin() {
                 <div className="form-group">
                   <label>Category</label>
                   <input value={templateForm.category} onChange={(e) => setTemplateForm(prev => ({ ...prev, category: e.target.value }))} placeholder="business" />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>HTML Preview File (.html)</label>
+                  <input type="file" accept=".html,text/html" onChange={handleTemplateHtmlUpload} style={{ fontSize: '0.75rem', color: 'var(--text-mid)' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', color: 'var(--text-dim)' }}>
+                      {uploadState.templateHtml === 'uploading' ? 'Reading HTML file...' : uploadState.templateHtml === 'done' ? 'HTML file loaded' : templateForm.previewHtml ? 'HTML preview loaded' : 'Upload a single index.html preview file'}
+                    </span>
+                    {templateForm.previewHtml && (
+                      <button
+                        type="button"
+                        onClick={() => setTemplateForm(prev => ({ ...prev, previewHtml: '' }))}
+                        style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-mid)', padding: '0.3rem 0.55rem', fontFamily: 'var(--font-mono)', fontSize: '0.62rem' }}
+                      >
+                        Clear HTML
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="form-group">
                   <label>Price (USD)</label>
@@ -777,7 +834,7 @@ export default function Admin() {
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>Name</th><th>Price</th><th>Sale</th><th>Status</th><th>Actions</th>
+                        <th>Name</th><th>Price</th><th>Sale</th><th>Download</th><th>Preview</th><th>Status</th><th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -786,6 +843,8 @@ export default function Admin() {
                           <td>{t.name}</td>
                           <td>${t.price}</td>
                           <td>{t.onSale && typeof t.salePrice === 'number' ? `$${t.salePrice}` : '-'}</td>
+                          <td>{t.downloadUrl ? 'set' : 'missing'}</td>
+                          <td>{t.previewUrl || t.previewHtml ? 'set' : 'missing'}</td>
                           <td>
                             <span className={`badge ${t.active ? 'badge-new' : 'badge-read'}`}>
                               {t.active ? 'active' : 'inactive'}

@@ -14,6 +14,8 @@ const fallbackTemplates = [
     description: 'A polished 5-page business template with conversion sections and strong visual hierarchy.',
     category: 'business',
     features: ['Landing + Services + Contact', 'Responsive layout', 'Fast setup'],
+    downloadUrl: 'https://example.com/downloads/studio-starter.zip',
+    previewUrl: 'https://example.com/templates/studio-starter/index.html',
     price: 149,
     salePrice: 99,
     onSale: true,
@@ -26,6 +28,8 @@ const fallbackTemplates = [
     description: 'A high-converting template for creators launching digital courses and memberships.',
     category: 'digital-product',
     features: ['Offer sections', 'Pricing blocks', 'FAQ and testimonials'],
+    downloadUrl: 'https://example.com/downloads/course-launch-kit.zip',
+    previewUrl: 'https://example.com/templates/course-launch-kit/index.html',
     price: 199,
     onSale: false,
     active: true
@@ -37,6 +41,8 @@ const fallbackTemplates = [
     description: 'A premium portfolio template with case studies, testimonials, and clear CTA flow.',
     category: 'portfolio',
     features: ['Case study pages', 'Lead capture', 'Clean animations'],
+    downloadUrl: 'https://example.com/downloads/agency-showcase.zip',
+    previewUrl: 'https://example.com/templates/agency-showcase/index.html',
     price: 249,
     salePrice: 199,
     onSale: true,
@@ -152,17 +158,92 @@ router.post('/checkout', async (req, res) => {
       return res.status(400).json({ message: 'No purchasable templates found in cart' });
     }
 
+    const purchasedTemplateIds = Array.from(
+      new Set(
+        items
+          .map(item => String(item.templateId || ''))
+          .filter(Boolean)
+      )
+    );
+
     const baseUrl = process.env.CLIENT_URL || 'http://localhost:3000';
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items,
-      success_url: `${baseUrl}/templates?status=success`,
+      metadata: {
+        templateIds: purchasedTemplateIds.join(',')
+      },
+      success_url: `${baseUrl}/templates/downloads?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/templates?status=cancelled`
     });
 
     res.json({ url: session.url });
   } catch (err) {
     res.status(500).json({ message: 'Could not create checkout session', error: err.message });
+  }
+});
+
+// GET /api/templates/delivery/:sessionId - Paid template delivery for successful checkout
+router.get('/delivery/:sessionId', async (req, res) => {
+  try {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({ message: 'Stripe is not configured. Add STRIPE_SECRET_KEY to server env.' });
+    }
+
+    const sessionId = String(req.params.sessionId || '').trim();
+    if (!sessionId) {
+      return res.status(400).json({ message: 'Missing session id' });
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (!session || session.mode !== 'payment') {
+      return res.status(404).json({ message: 'Checkout session not found' });
+    }
+
+    if (session.payment_status !== 'paid') {
+      return res.status(403).json({ message: 'Payment has not completed for this session yet.' });
+    }
+
+    const templateIds = String(session.metadata?.templateIds || '')
+      .split(',')
+      .map(id => id.trim())
+      .filter(Boolean);
+
+    if (templateIds.length === 0) {
+      return res.json({
+        customerEmail: session.customer_details?.email || session.customer_email || null,
+        templates: []
+      });
+    }
+
+    let templates = [];
+    try {
+      templates = await Template.find({ _id: { $in: templateIds } }).lean();
+    } catch {
+      templates = fallbackTemplates.filter(t => templateIds.includes(String(t._id)));
+    }
+
+    const byId = new Map(templates.map(t => [String(t._id), t]));
+    const orderedTemplates = templateIds
+      .map(id => byId.get(String(id)))
+      .filter(Boolean)
+      .map(t => ({
+        _id: t._id,
+        name: t.name,
+        slug: t.slug,
+        downloadUrl: t.downloadUrl || null,
+        category: t.category,
+        imageUrl: t.imageUrl
+      }));
+
+    res.json({
+      customerEmail: session.customer_details?.email || session.customer_email || null,
+      templates: orderedTemplates
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not load delivery details', error: err.message });
   }
 });
 

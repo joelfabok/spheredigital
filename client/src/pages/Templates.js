@@ -9,6 +9,8 @@ export default function Templates() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState(null);
+  const [sortBy, setSortBy] = useState('newest');
   const [searchParams] = useSearchParams();
 
   const { items, itemCount, total, addToCart, updateQuantity, removeFromCart, clearCart } = useCart();
@@ -36,6 +38,36 @@ export default function Templates() {
     [items, templates]
   );
 
+  const sortedTemplates = useMemo(() => {
+    const list = [...templates];
+
+    const getEffectivePrice = (template) => (
+      template.onSale && typeof template.salePrice === 'number' ? template.salePrice : template.price
+    );
+
+    if (sortBy === 'price-low') {
+      return list.sort((a, b) => (getEffectivePrice(a) || 0) - (getEffectivePrice(b) || 0));
+    }
+
+    if (sortBy === 'price-high') {
+      return list.sort((a, b) => (getEffectivePrice(b) || 0) - (getEffectivePrice(a) || 0));
+    }
+
+    if (sortBy === 'name-az') {
+      return list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    }
+
+    if (sortBy === 'name-za') {
+      return list.sort((a, b) => String(b.name || '').localeCompare(String(a.name || '')));
+    }
+
+    if (sortBy === 'oldest') {
+      return list.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    }
+
+    return list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [templates, sortBy]);
+
   const handleCheckout = async () => {
     setCheckoutLoading(true);
     setError('');
@@ -55,23 +87,41 @@ export default function Templates() {
       <section className="templates-hero">
         <p className="section-label">Template Marketplace</p>
         <h1>Browse and buy production-ready <em>website templates</em></h1>
-        <p>Pick a template, add it to your cart, and checkout securely with Stripe.</p>
+        <p>Pick a template, add it to your cart, and checkout securely with Stripe for instant digital delivery.</p>
+        <p>
+          By purchasing, you agree to the <Link to="/templates/license">template license terms</Link>.
+        </p>
         <Link to="/" className="btn-ghost">Back to Home</Link>
       </section>
 
-      {checkoutStatus === 'success' && (
-        <div className="template-alert success">Payment successful. We will contact you with delivery details.</div>
-      )}
       {checkoutStatus === 'cancelled' && (
         <div className="template-alert">Checkout was cancelled. Your cart is still here.</div>
       )}
       {error && <div className="template-alert error">{error}</div>}
 
+      <div className="template-toolbar">
+        <p>{sortedTemplates.length} template{sortedTemplates.length === 1 ? '' : 's'}</p>
+        <label htmlFor="template-sort">Sort by</label>
+        <select
+          id="template-sort"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+        >
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="price-low">Price: Low to High</option>
+          <option value="price-high">Price: High to Low</option>
+          <option value="name-az">Name: A to Z</option>
+          <option value="name-za">Name: Z to A</option>
+        </select>
+      </div>
+
       <section className="templates-market">
         <div className="templates-catalog">
-          {loading ? <div className="page-loading">Loading templates...</div> : templates.map(template => {
+          {loading ? <div className="page-loading">Loading templates...</div> : sortedTemplates.map(template => {
             const price = template.onSale && typeof template.salePrice === 'number' ? template.salePrice : template.price;
             const imageUrl = normalizeImageUrl(template.imageUrl);
+            const hasPreview = Boolean(template.previewHtml || template.previewUrl);
             return (
               <article key={template._id} className="template-store-card">
                 <div
@@ -91,6 +141,14 @@ export default function Templates() {
                     <strong>${price}</strong>
                     {template.onSale && typeof template.salePrice === 'number' && <span>${template.price}</span>}
                   </div>
+                  {hasPreview && (
+                    <button
+                      className="template-preview-btn"
+                      onClick={() => setPreviewTemplate(template)}
+                    >
+                      {template.previewHtml ? 'Preview HTML Site' : 'Preview Site'}
+                    </button>
+                  )}
                   <button className="btn-primary template-add-btn" onClick={() => addToCart(template)}>Add to Cart</button>
                 </div>
               </article>
@@ -130,6 +188,34 @@ export default function Templates() {
           <button className="cart-clear" onClick={clearCart} disabled={cartItems.length === 0}>Clear Cart</button>
         </aside>
       </section>
+
+      {previewTemplate && (
+        <div className="template-preview-modal" role="dialog" aria-modal="true" aria-label="Template preview">
+          <div className="template-preview-shell">
+            <div className="template-preview-head">
+              <h3>{previewTemplate.name}</h3>
+              <button type="button" className="template-preview-close" onClick={() => setPreviewTemplate(null)}>Close</button>
+            </div>
+            <div className="template-preview-frame-wrap">
+              {previewTemplate.previewUrl ? (
+                <iframe
+                  title={`${previewTemplate.name} preview`}
+                  src={previewTemplate.previewUrl}
+                  className="template-preview-frame"
+                  sandbox="allow-forms allow-modals allow-popups allow-scripts allow-same-origin"
+                />
+              ) : (
+                <iframe
+                  title={`${previewTemplate.name} preview`}
+                  srcDoc={previewTemplate.previewHtml}
+                  className="template-preview-frame"
+                  sandbox="allow-forms allow-modals allow-popups allow-scripts allow-same-origin"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

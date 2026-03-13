@@ -7,6 +7,8 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
 import Templates from './pages/Templates';
+import TemplateDownloads from './pages/TemplateDownloads';
+import TemplateLicense from './pages/TemplateLicense';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -22,6 +24,8 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/templates" element={<Templates />} />
+        <Route path="/templates/downloads" element={<TemplateDownloads />} />
+        <Route path="/templates/license" element={<TemplateLicense />} />
         <Route path="/admin/login" element={<Login />} />
         <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" />} />

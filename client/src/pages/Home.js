@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ContactForm from '../components/ContactForm';
-import { getProjects, getHomeContent } from '../services/api';
+import { getProjects, getHomeContent, getTemplates } from '../services/api';
 import { normalizeImageUrl } from '../utils/imageUrl';
 
 const SERVICES = [
@@ -31,35 +31,9 @@ const DEFAULT_HOME_CONTENT = {
   ]
 };
 
-const TEMPLATE_PACKS = [
-  {
-    id: 'starter',
-    name: 'Studio Starter',
-    type: 'Business Website',
-    price: '$149',
-    desc: 'A polished 5-page template for service businesses with conversion-focused sections.',
-    features: ['Landing + Services + Contact', 'Mobile-first layouts', 'Easy CMS-ready structure'],
-  },
-  {
-    id: 'course',
-    name: 'Course Launch Kit',
-    type: 'Digital Product',
-    price: '$199',
-    desc: 'A product-focused site template designed for creators launching a course or membership.',
-    features: ['Sales page blocks', 'Pricing + FAQ sections', 'Checkout-ready flow'],
-  },
-  {
-    id: 'agency',
-    name: 'Agency Showcase',
-    type: 'Portfolio',
-    price: '$249',
-    desc: 'A premium portfolio template with case-study sections and high-impact hero layouts.',
-    features: ['Case study pages', 'Team + testimonials', 'Lead capture CTA system'],
-  },
-];
-
 export default function Home() {
   const [projects, setProjects] = useState(FALLBACK_PROJECTS);
+  const [templatePacks, setTemplatePacks] = useState([]);
   const [homeContent, setHomeContent] = useState(DEFAULT_HOME_CONTENT);
   const [galleryState, setGalleryState] = useState({ open: false, title: '', images: [], index: 0 });
   const observerRef = useRef(null);
@@ -77,6 +51,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    getTemplates()
+      .then(res => {
+        const incoming = Array.isArray(res.data) ? res.data : [];
+        if (incoming.length === 0) return;
+
+        const sorted = [...incoming].sort((a, b) => {
+          const aTime = new Date(a.createdAt || 0).getTime();
+          const bTime = new Date(b.createdAt || 0).getTime();
+          return bTime - aTime;
+        });
+
+        setTemplatePacks(sorted.slice(0, 3));
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     observerRef.current = new IntersectionObserver(
       entries => entries.forEach(entry => {
         if (entry.isIntersecting) entry.target.classList.add('visible');
@@ -85,9 +76,11 @@ export default function Home() {
     );
     document.querySelectorAll('.fade-up').forEach(el => observerRef.current.observe(el));
     return () => observerRef.current?.disconnect();
-  }, [projects]);
+  }, [projects, templatePacks]);
 
   const displayProjects = projects.slice(0, 3);
+
+  const displayTemplatePacks = templatePacks.slice(0, 3);
 
   const getProjectImages = (project) => {
     const list = [];
@@ -214,25 +207,44 @@ export default function Home() {
       <section className="templates" id="templates">
         <div className="section-label fade-up">Template Shop</div>
         <h2 className="section-title fade-up">Buy ready-made <em>website templates</em></h2>
-        <div className="templates-grid">
-          {TEMPLATE_PACKS.map((pack, i) => (
-            <article key={pack.id} className="template-card fade-up">
-              <div className={`template-preview variant-${i + 1}`}>
-                <span>{pack.type}</span>
-              </div>
-              <div className="template-meta">
-                <p>{pack.type}</p>
-                <strong>{pack.price}</strong>
-              </div>
-              <h3>{pack.name}</h3>
-              <p>{pack.desc}</p>
-              <ul className="template-list">
-                {pack.features.map(item => <li key={item}>{item}</li>)}
-              </ul>
-              <a href="/templates" className="btn-primary template-btn">Buy This Template</a>
-            </article>
-          ))}
-        </div>
+        {displayTemplatePacks.length === 0 ? (
+          <div className="template-empty fade-up">
+            No templates uploaded yet. Add templates in Admin to show them here.
+          </div>
+        ) : (
+          <div className="templates-grid">
+            {displayTemplatePacks.map((pack, i) => {
+              const unitPrice = pack.onSale && typeof pack.salePrice === 'number' ? pack.salePrice : pack.price;
+              const priceLabel = typeof unitPrice === 'number' ? `$${unitPrice}` : '$--';
+              const previewImage = normalizeImageUrl(pack.imageUrl);
+
+              return (
+              <article key={pack._id || pack.slug || pack.name} className="template-card fade-up">
+                <div
+                  className={`template-preview variant-${(i % 3) + 1}`}
+                  style={previewImage ? {
+                    backgroundImage: `linear-gradient(160deg, rgba(8, 8, 8, 0.35), rgba(8, 8, 8, 0.75)), url(${previewImage})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  } : undefined}
+                >
+                  <span>{pack.category || 'Website Template'}</span>
+                </div>
+                <div className="template-meta">
+                  <p>{pack.category || 'Website'}</p>
+                  <strong>{priceLabel}</strong>
+                </div>
+                <h3>{pack.name}</h3>
+                <p>{pack.description}</p>
+                <ul className="template-list">
+                  {(Array.isArray(pack.features) ? pack.features : []).slice(0, 3).map(item => <li key={item}>{item}</li>)}
+                </ul>
+                <a href="/templates" className="btn-primary template-btn">Buy This Template</a>
+              </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* CONTACT */}
@@ -266,6 +278,7 @@ export default function Home() {
           <a href="#services">Services</a>
           <a href="#work">Work</a>
           <a href="#templates">Templates</a>
+          <a href="/templates/license">License</a>
           <a href="#contact">Contact</a>
           <a href="/admin">Admin</a>
         </div>

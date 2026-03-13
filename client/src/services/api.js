@@ -31,5 +31,6 @@ export const createTemplate = (data) => API.post('/templates', data);
 export const updateTemplate = (id, data) => API.put(`/templates/${id}`, data);
 export const deleteTemplate = (id) => API.delete(`/templates/${id}`);
 export const checkoutTemplates = (items) => API.post('/templates/checkout', { items });
+export const getTemplateDelivery = (sessionId) => API.get(`/templates/delivery/${sessionId}`);
 
 export default API;
