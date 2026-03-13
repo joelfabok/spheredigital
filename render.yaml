@@ -18,3 +18,7 @@ services:
         sync: false
       - key: CLIENT_URL
         sync: false
+      - key: REACT_APP_CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: REACT_APP_CLOUDINARY_UPLOAD_PRESET
+        sync: false

@@ -49,6 +49,12 @@ Optional client environment file for local or hosted frontend builds:
 cp client/.env.example client/.env
 ```
 
+Client env values:
+
+- `REACT_APP_API_URL` = API base URL
+- `REACT_APP_CLOUDINARY_CLOUD_NAME` = your Cloudinary cloud name
+- `REACT_APP_CLOUDINARY_UPLOAD_PRESET` = unsigned upload preset name
+
 ### 4. Run in Development
 ```bash
 npm run dev
@@ -93,6 +99,21 @@ Admin template management endpoints:
 - `PUT /api/templates/:id`
 - `DELETE /api/templates/:id`
 
+## Cloudinary Image Uploads (Free Tier)
+
+The admin dashboard supports direct image uploads to Cloudinary (free tier) for project and template images.
+
+1. Create a free Cloudinary account
+2. In Cloudinary settings, create an **unsigned upload preset**
+3. Set client environment variables:
+
+```bash
+REACT_APP_CLOUDINARY_CLOUD_NAME=your_cloud_name
+REACT_APP_CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
+```
+
+Then use the file inputs in the Admin dashboard under Projects and Templates; uploaded URLs are auto-filled.
+
 ## Deployment
 
 ### Render Deployment (Recommended)
@@ -116,6 +137,8 @@ Set these in Render:
 - `JWT_SECRET` = a long random secret
 - `STRIPE_SECRET_KEY` = your Stripe secret key (required for checkout)
 - `CLIENT_URL` = your Render app URL (example: `https://spheredigital.onrender.com`)
+- `REACT_APP_CLOUDINARY_CLOUD_NAME` = your Cloudinary cloud name
+- `REACT_APP_CLOUDINARY_UPLOAD_PRESET` = your unsigned upload preset
 - `PORT` is automatically provided by Render
 
 ### 3. MongoDB

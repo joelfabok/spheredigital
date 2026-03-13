@@ -15,6 +15,7 @@ import {
   updateTemplate,
   deleteTemplate
 } from '../services/api';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 function Sidebar() {
   const { logout } = useAuth();
@@ -48,6 +49,10 @@ function Sidebar() {
 
 export default function Admin() {
   const { user } = useAuth();
+  const cloudinaryCloudName = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME;
+  const cloudinaryUploadPreset = process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET;
+  const hasCloudinaryConfig = Boolean(cloudinaryCloudName && cloudinaryUploadPreset);
+
   const [contacts, setContacts] = useState([]);
   const [projects, setProjects] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -99,6 +104,12 @@ export default function Admin() {
     features: ''
   });
   const [loading, setLoading] = useState(true);
+  const [uploadState, setUploadState] = useState({
+    projectPrimary: 'idle',
+    projectGallery: 'idle',
+    templateImage: 'idle',
+    error: ''
+  });
 
   useEffect(() => {
     Promise.all([getContacts(), getProjects(), getHomeContent(), getAdminTemplates()])
@@ -181,7 +192,7 @@ export default function Admin() {
         name: templateForm.name,
         slug: templateForm.slug,
         description: templateForm.description,
-        imageUrl: templateForm.imageUrl,
+        imageUrl: normalizeImageUrl(templateForm.imageUrl),
         category: templateForm.category,
         price: Number(templateForm.price),
         salePrice: templateForm.salePrice ? Number(templateForm.salePrice) : undefined,
@@ -275,8 +286,8 @@ export default function Admin() {
       category: projectForm.category,
       description: projectForm.description,
       techStack: projectForm.techStack.split(',').map(item => item.trim()).filter(Boolean),
-      imageUrl: projectForm.imageUrl,
-      imageUrls: projectForm.imageUrls.split(',').map(item => item.trim()).filter(Boolean),
+      imageUrl: normalizeImageUrl(projectForm.imageUrl),
+      imageUrls: projectForm.imageUrls.split(',').map(item => normalizeImageUrl(item.trim())).filter(Boolean),
       liveUrl: projectForm.liveUrl,
       featured: projectForm.featured,
       order: Number(projectForm.order) || 0
@@ -304,6 +315,102 @@ export default function Admin() {
       setProjects(prev => prev.filter(item => item._id !== id));
     } catch {
       setProjectStatus('error');
+    }
+  };
+
+  const uploadToCloudinary = async (file) => {
+    if (!hasCloudinaryConfig) {
+      throw new Error('Cloudinary is not configured. Add REACT_APP_CLOUDINARY_CLOUD_NAME and REACT_APP_CLOUDINARY_UPLOAD_PRESET in client env.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', cloudinaryUploadPreset);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Upload failed. Check your Cloudinary unsigned preset settings.');
+    }
+
+    const data = await response.json();
+    return data.secure_url || data.url;
+  };
+
+  const mergeCsvUrls = (existingCsv, newUrls) => {
+    const existing = existingCsv
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+
+    const merged = [...existing];
+    newUrls.forEach((url) => {
+      if (url && !merged.includes(url)) merged.push(url);
+    });
+
+    return merged.join(', ');
+  };
+
+  const handleProjectPrimaryUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadState(prev => ({ ...prev, projectPrimary: 'uploading', error: '' }));
+    try {
+      const uploadedUrl = await uploadToCloudinary(file);
+      setProjectForm(prev => ({ ...prev, imageUrl: uploadedUrl }));
+      setUploadState(prev => ({ ...prev, projectPrimary: 'done' }));
+      setTimeout(() => setUploadState(prev => ({ ...prev, projectPrimary: 'idle' })), 1800);
+    } catch (err) {
+      setUploadState(prev => ({ ...prev, projectPrimary: 'error', error: err.message || 'Could not upload image.' }));
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleProjectGalleryUpload = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    setUploadState(prev => ({ ...prev, projectGallery: 'uploading', error: '' }));
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        const uploadedUrl = await uploadToCloudinary(file);
+        uploadedUrls.push(uploadedUrl);
+      }
+
+      setProjectForm(prev => ({
+        ...prev,
+        imageUrls: mergeCsvUrls(prev.imageUrls, uploadedUrls)
+      }));
+
+      setUploadState(prev => ({ ...prev, projectGallery: 'done' }));
+      setTimeout(() => setUploadState(prev => ({ ...prev, projectGallery: 'idle' })), 1800);
+    } catch (err) {
+      setUploadState(prev => ({ ...prev, projectGallery: 'error', error: err.message || 'Could not upload gallery images.' }));
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleTemplateImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadState(prev => ({ ...prev, templateImage: 'uploading', error: '' }));
+    try {
+      const uploadedUrl = await uploadToCloudinary(file);
+      setTemplateForm(prev => ({ ...prev, imageUrl: uploadedUrl }));
+      setUploadState(prev => ({ ...prev, templateImage: 'done' }));
+      setTimeout(() => setUploadState(prev => ({ ...prev, templateImage: 'idle' })), 1800);
+    } catch (err) {
+      setUploadState(prev => ({ ...prev, templateImage: 'error', error: err.message || 'Could not upload template image.' }));
+    } finally {
+      event.target.value = '';
     }
   };
 
@@ -526,10 +633,22 @@ export default function Admin() {
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label>Primary Image URL</label>
                   <input value={projectForm.imageUrl} onChange={(e) => setProjectForm(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="https://... (Google Drive share links supported)" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                    <input type="file" accept="image/*" onChange={handleProjectPrimaryUpload} style={{ fontSize: '0.75rem', color: 'var(--text-mid)' }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', color: 'var(--text-dim)' }}>
+                      {uploadState.projectPrimary === 'uploading' ? 'Uploading...' : uploadState.projectPrimary === 'done' ? 'Uploaded' : 'Upload to Cloudinary'}
+                    </span>
+                  </div>
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label>Gallery Image URLs (comma-separated)</label>
                   <input value={projectForm.imageUrls} onChange={(e) => setProjectForm(prev => ({ ...prev, imageUrls: e.target.value }))} placeholder="https://img1.jpg, https://img2.jpg (Drive links also supported)" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                    <input type="file" accept="image/*" multiple onChange={handleProjectGalleryUpload} style={{ fontSize: '0.75rem', color: 'var(--text-mid)' }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', color: 'var(--text-dim)' }}>
+                      {uploadState.projectGallery === 'uploading' ? 'Uploading gallery...' : uploadState.projectGallery === 'done' ? 'Gallery uploaded' : 'Upload one or more images to Cloudinary'}
+                    </span>
+                  </div>
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label>Live URL</label>
@@ -610,6 +729,12 @@ export default function Admin() {
                 <div className="form-group">
                   <label>Image URL</label>
                   <input value={templateForm.imageUrl} onChange={(e) => setTemplateForm(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="https://... (Google Drive share links supported)" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                    <input type="file" accept="image/*" onChange={handleTemplateImageUpload} style={{ fontSize: '0.75rem', color: 'var(--text-mid)' }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', color: 'var(--text-dim)' }}>
+                      {uploadState.templateImage === 'uploading' ? 'Uploading...' : uploadState.templateImage === 'done' ? 'Uploaded' : 'Upload to Cloudinary'}
+                    </span>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label>Category</label>
@@ -686,6 +811,12 @@ export default function Admin() {
                 </div>
               </div>
             </div>
+
+            {uploadState.error && (
+              <div className="admin-card" style={{ borderColor: 'rgba(224, 0, 85, 0.4)', marginTop: '0.5rem' }}>
+                <p style={{ color: '#e05', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{uploadState.error}</p>
+              </div>
+            )}
           </>
         )}
       </div>
