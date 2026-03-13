@@ -79,6 +79,7 @@ export default function Admin() {
   const [templateStatus, setTemplateStatus] = useState('idle');
   const [projectStatus, setProjectStatus] = useState('idle');
   const [editingProjectId, setEditingProjectId] = useState(null);
+  const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [projectForm, setProjectForm] = useState({
     title: '',
     slug: '',
@@ -184,7 +185,46 @@ export default function Admin() {
     }
   };
 
-  const handleCreateTemplate = async () => {
+  const resetTemplateForm = () => {
+    setTemplateForm({
+      name: '',
+      slug: '',
+      description: '',
+      imageUrl: '',
+      downloadUrl: '',
+      previewUrl: '',
+      previewHtml: '',
+      category: 'website',
+      price: '',
+      salePrice: '',
+      onSale: false,
+      active: true,
+      features: ''
+    });
+    setEditingTemplateId(null);
+  };
+
+  const handleEditTemplate = (template) => {
+    setEditingTemplateId(template._id);
+    setTemplateForm({
+      name: template.name || '',
+      slug: template.slug || '',
+      description: template.description || '',
+      imageUrl: template.imageUrl || '',
+      downloadUrl: template.downloadUrl || '',
+      previewUrl: template.previewUrl || '',
+      previewHtml: template.previewHtml || '',
+      category: template.category || 'website',
+      price: typeof template.price === 'number' ? String(template.price) : '',
+      salePrice: typeof template.salePrice === 'number' ? String(template.salePrice) : '',
+      onSale: !!template.onSale,
+      active: typeof template.active === 'boolean' ? template.active : true,
+      features: Array.isArray(template.features) ? template.features.join(', ') : ''
+    });
+    setTemplateStatus('idle');
+  };
+
+  const handleSaveTemplate = async () => {
     if (!templateForm.name || !templateForm.slug || !templateForm.description || !templateForm.price) {
       setTemplateStatus('validation');
       return;
@@ -192,7 +232,7 @@ export default function Admin() {
 
     setTemplateStatus('saving');
     try {
-      await createTemplate({
+      const payload = {
         name: templateForm.name,
         slug: templateForm.slug,
         description: templateForm.description,
@@ -209,13 +249,17 @@ export default function Admin() {
           .split(',')
           .map(item => item.trim())
           .filter(Boolean)
-      });
+      };
+
+      if (editingTemplateId) {
+        await updateTemplate(editingTemplateId, payload);
+      } else {
+        await createTemplate(payload);
+      }
 
       const refreshed = await getAdminTemplates();
       setTemplates(refreshed.data || []);
-      setTemplateForm({
-        name: '', slug: '', description: '', imageUrl: '', downloadUrl: '', previewUrl: '', previewHtml: '', category: 'website', price: '', salePrice: '', onSale: false, active: true, features: ''
-      });
+      resetTemplateForm();
       setTemplateStatus('saved');
       setTimeout(() => setTemplateStatus('idle'), 1800);
     } catch {
@@ -821,9 +865,14 @@ export default function Admin() {
                 </label>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginTop: '1rem' }}>
-                <button className="form-submit" onClick={handleCreateTemplate} disabled={templateStatus === 'saving'} style={{ width: 'auto', marginTop: 0, padding: '0.75rem 1.2rem' }}>
-                  {templateStatus === 'saving' ? 'Saving...' : 'Add Template'}
+                <button className="form-submit" onClick={handleSaveTemplate} disabled={templateStatus === 'saving'} style={{ width: 'auto', marginTop: 0, padding: '0.75rem 1.2rem' }}>
+                  {templateStatus === 'saving' ? 'Saving...' : editingTemplateId ? 'Update Template' : 'Add Template'}
                 </button>
+                {editingTemplateId && (
+                  <button onClick={resetTemplateForm} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-mid)', padding: '0.75rem 1rem', fontFamily: 'var(--font-mono)', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    Cancel Edit
+                  </button>
+                )}
                 {templateStatus === 'saved' && <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Saved</span>}
                 {templateStatus === 'validation' && <span style={{ color: '#e05', fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Please fill required fields</span>}
                 {templateStatus === 'error' && <span style={{ color: '#e05', fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>Request failed</span>}
@@ -852,6 +901,9 @@ export default function Admin() {
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                              <button onClick={() => handleEditTemplate(t)} style={{ background: 'transparent', color: 'var(--accent)', border: '1px solid var(--border)', padding: '0.35rem 0.6rem', fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}>
+                                Edit
+                              </button>
                               <button onClick={() => handleToggleTemplate(t, 'onSale')} style={{ background: 'transparent', color: 'var(--accent)', border: '1px solid var(--border)', padding: '0.35rem 0.6rem', fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}>
                                 {t.onSale ? 'Remove Sale' : 'Put On Sale'}
                               </button>

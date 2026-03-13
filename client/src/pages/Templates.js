@@ -82,6 +82,58 @@ export default function Templates() {
     }
   };
 
+  const buildWatermarkedSrcDoc = (template) => {
+    if (!template?.previewHtml) return '';
+
+    const watermarkedBadge = `
+      <style>
+        .sphere-preview-watermark {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 2147483646;
+          opacity: 0.17;
+          background-image: repeating-linear-gradient(
+            -28deg,
+            rgba(201, 169, 110, 0.35) 0px,
+            rgba(201, 169, 110, 0.35) 2px,
+            transparent 2px,
+            transparent 175px
+          );
+        }
+        .sphere-preview-watermark::before {
+          content: 'SPHERE DIGITAL PREVIEW - NOT FOR RESALE';
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          color: rgba(201, 169, 110, 0.45);
+          font-family: Arial, sans-serif;
+          font-size: 20px;
+          letter-spacing: 0.35em;
+          transform: rotate(-25deg);
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+        html, body {
+          -webkit-user-select: none;
+          user-select: none;
+        }
+      </style>
+      <div class="sphere-preview-watermark"></div>
+      <script>
+        document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+      </script>
+    `;
+
+    const html = String(template.previewHtml);
+    if (/<\/body>/i.test(html)) {
+      return html.replace(/<\/body>/i, `${watermarkedBadge}</body>`);
+    }
+
+    return `${html}${watermarkedBadge}`;
+  };
+
   return (
     <div className="templates-page">
       <section className="templates-hero">
@@ -198,19 +250,29 @@ export default function Templates() {
             </div>
             <div className="template-preview-frame-wrap">
               {previewTemplate.previewUrl ? (
-                <iframe
-                  title={`${previewTemplate.name} preview`}
-                  src={previewTemplate.previewUrl}
-                  className="template-preview-frame"
-                  sandbox="allow-forms allow-modals allow-popups allow-scripts allow-same-origin"
-                />
+                <>
+                  <iframe
+                    title={`${previewTemplate.name} preview`}
+                    src={previewTemplate.previewUrl}
+                    className="template-preview-frame"
+                    sandbox="allow-forms allow-modals allow-popups allow-scripts allow-same-origin"
+                  />
+                  <div className="template-preview-watermark-layer" aria-hidden="true">
+                    <span>SPHERE DIGITAL PREVIEW</span>
+                  </div>
+                </>
               ) : (
-                <iframe
-                  title={`${previewTemplate.name} preview`}
-                  srcDoc={previewTemplate.previewHtml}
-                  className="template-preview-frame"
-                  sandbox="allow-forms allow-modals allow-popups allow-scripts allow-same-origin"
-                />
+                <>
+                  <iframe
+                    title={`${previewTemplate.name} preview`}
+                    srcDoc={buildWatermarkedSrcDoc(previewTemplate)}
+                    className="template-preview-frame"
+                    sandbox="allow-forms allow-modals allow-popups allow-scripts allow-same-origin"
+                  />
+                  <div className="template-preview-watermark-layer" aria-hidden="true">
+                    <span>SPHERE DIGITAL PREVIEW</span>
+                  </div>
+                </>
               )}
             </div>
           </div>
