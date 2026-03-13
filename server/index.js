@@ -23,6 +23,7 @@ app.use('/api/content', contentRoutes);
 app.use('/api/templates', templateRoutes);
 
 // Health check
+app.get('/', (req, res) => res.json({ message: 'Sphere Digital API is live', health: '/api/health' }));
 app.get('/api/health', (req, res) => res.json({ status: 'Sphere Digital API running' }));
 
 const PORT = process.env.PORT || 5000;
