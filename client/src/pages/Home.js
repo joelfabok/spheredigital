@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ContactForm from '../components/ContactForm';
 import { getProjects, getHomeContent } from '../services/api';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 const SERVICES = [
   { num: '01', icon: '🤖', title: 'Chat System', desc: 'Custom bots that engage communities, automate moderation, run events, and create unforgettable server experiences.' },
@@ -92,10 +93,12 @@ export default function Home() {
     const list = [];
     if (Array.isArray(project.imageUrls)) {
       project.imageUrls.forEach(url => {
-        if (typeof url === 'string' && url.trim()) list.push(url.trim());
+        const normalized = normalizeImageUrl(url);
+        if (normalized) list.push(normalized);
       });
     }
-    if (project.imageUrl && !list.includes(project.imageUrl)) list.unshift(project.imageUrl);
+    const primaryImage = normalizeImageUrl(project.imageUrl);
+    if (primaryImage && !list.includes(primaryImage)) list.unshift(primaryImage);
     return list;
   };
 
@@ -177,16 +180,20 @@ export default function Home() {
           </div>
         </div>
         <div className="work-grid">
-          {displayProjects.map((project, i) => (
+          {displayProjects.map((project, i) => {
+            const primaryImage = normalizeImageUrl(project.imageUrl);
+            const projectImages = getProjectImages(project);
+
+            return (
             <div key={project._id} className={`project-card fade-up ${i === 0 ? 'large' : 'small'}`}>
               <button
                 className={`project-media project-media-btn media-${(i % 3) + 1}`}
-                style={project.imageUrl ? { backgroundImage: `url(${project.imageUrl})` } : undefined}
+                style={primaryImage ? { backgroundImage: `url(${primaryImage})` } : undefined}
                 onClick={() => openGallery(project)}
-                disabled={getProjectImages(project).length === 0}
+                disabled={projectImages.length === 0}
               >
-                {!project.imageUrl && <span>Project sample preview</span>}
-                {getProjectImages(project).length > 0 && <span className="project-media-cta">Open gallery</span>}
+                {!primaryImage && <span>Project sample preview</span>}
+                {projectImages.length > 0 && <span className="project-media-cta">Open gallery</span>}
               </button>
               <div className="project-category">{project.category?.replace('-', ' ')}</div>
               <h3>{project.title}</h3>
@@ -198,7 +205,8 @@ export default function Home() {
                 {project.liveUrl && <span className="project-arrow">↗</span>}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

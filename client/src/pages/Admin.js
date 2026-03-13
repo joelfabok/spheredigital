@@ -525,11 +525,11 @@ export default function Admin() {
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label>Primary Image URL</label>
-                  <input value={projectForm.imageUrl} onChange={(e) => setProjectForm(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="https://..." />
+                  <input value={projectForm.imageUrl} onChange={(e) => setProjectForm(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="https://... (Google Drive share links supported)" />
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label>Gallery Image URLs (comma-separated)</label>
-                  <input value={projectForm.imageUrls} onChange={(e) => setProjectForm(prev => ({ ...prev, imageUrls: e.target.value }))} placeholder="https://img1.jpg, https://img2.jpg" />
+                  <input value={projectForm.imageUrls} onChange={(e) => setProjectForm(prev => ({ ...prev, imageUrls: e.target.value }))} placeholder="https://img1.jpg, https://img2.jpg (Drive links also supported)" />
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label>Live URL</label>
@@ -609,7 +609,7 @@ export default function Admin() {
                 </div>
                 <div className="form-group">
                   <label>Image URL</label>
-                  <input value={templateForm.imageUrl} onChange={(e) => setTemplateForm(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="https://..." />
+                  <input value={templateForm.imageUrl} onChange={(e) => setTemplateForm(prev => ({ ...prev, imageUrl: e.target.value }))} placeholder="https://... (Google Drive share links supported)" />
                 </div>
                 <div className="form-group">
                   <label>Category</label>

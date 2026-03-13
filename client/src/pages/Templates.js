@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { checkoutTemplates, getTemplates } from '../services/api';
 import { useCart } from '../context/CartContext';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 export default function Templates() {
   const [templates, setTemplates] = useState([]);
@@ -70,13 +71,14 @@ export default function Templates() {
         <div className="templates-catalog">
           {loading ? <div className="page-loading">Loading templates...</div> : templates.map(template => {
             const price = template.onSale && typeof template.salePrice === 'number' ? template.salePrice : template.price;
+            const imageUrl = normalizeImageUrl(template.imageUrl);
             return (
               <article key={template._id} className="template-store-card">
                 <div
                   className="template-store-media"
-                  style={template.imageUrl ? { backgroundImage: `url(${template.imageUrl})` } : undefined}
+                  style={imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined}
                 >
-                  {!template.imageUrl && <span>Template preview</span>}
+                  {!imageUrl && <span>Template preview</span>}
                   {template.onSale && typeof template.salePrice === 'number' && (
                     <div className="sale-badge">On Sale</div>
                   )}
