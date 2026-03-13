@@ -44,6 +44,11 @@ cp server/.env.example server/.env
 # Edit server/.env with your MongoDB URI, JWT secret, etc.
 ```
 
+Optional client environment file for local or hosted frontend builds:
+```bash
+cp client/.env.example client/.env
+```
+
 ### 4. Run in Development
 ```bash
 npm run dev
@@ -90,17 +95,62 @@ Admin template management endpoints:
 
 ## Deployment
 
-### Frontend (Vercel/Netlify)
+### Render Deployment (Recommended)
+
+Deploy as two services:
+
+1. **Backend API** as a Render Web Service
+2. **Frontend** as a Render Static Site
+
+### 1. Backend Service (Render Web Service)
+
+- **Root Directory**: `server`
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
+
+Set these environment variables in Render:
+
+- `MONGO_URI` = your MongoDB Atlas connection string
+- `JWT_SECRET` = a long random secret
+- `CLIENT_URL` = your frontend Render URL (for CORS and Stripe redirects)
+- `STRIPE_SECRET_KEY` = your Stripe secret key (required for checkout)
+- `PORT` is automatically provided by Render
+
+### 2. Frontend Service (Render Static Site)
+
+- **Root Directory**: `client`
+- **Build Command**: `npm install && npm run build`
+- **Publish Directory**: `build`
+
+Set this environment variable in Render Static Site:
+
+- `REACT_APP_API_URL` = your backend URL + `/api`
+
+Example:
+
 ```bash
-cd client && npm run build
+REACT_APP_API_URL=https://sphere-digital-api.onrender.com/api
 ```
-Deploy the `build/` folder.
 
-### Backend (Railway/Render/Heroku)
-Deploy the `server/` folder. Set environment variables in your host dashboard.
+### 3. MongoDB
 
-### MongoDB
-Use [MongoDB Atlas](https://www.mongodb.com/atlas) for production — free tier available.
+Use [MongoDB Atlas](https://www.mongodb.com/atlas) for production.
+
+### 4. Post-Deploy Setup
+
+Create your first admin account once:
+
+- `POST https://<your-backend-domain>/api/auth/register`
+
+Body:
+
+```json
+{ "email": "admin@youremail.com", "password": "yourpassword" }
+```
+
+Then login from:
+
+- `https://<your-frontend-domain>/admin`
 
 ---
 
