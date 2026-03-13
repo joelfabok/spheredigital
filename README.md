@@ -142,11 +142,6 @@ Create your first admin account once:
 
 - `POST https://<your-backend-domain>/api/auth/register`
 
-Body:
-
-```json
-{ "email": "admin@youremail.com", "password": "yourpassword" }
-```
 
 Then login from:
 
