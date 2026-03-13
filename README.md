@@ -97,40 +97,26 @@ Admin template management endpoints:
 
 ### Render Deployment (Recommended)
 
-Deploy as two services:
+Deploy everything as one Render Web Service from the repository root.
 
-1. **Backend API** as a Render Web Service
-2. **Frontend** as a Render Static Site
+### 1. Render Web Service Settings
 
-### 1. Backend Service (Render Web Service)
-
-- **Root Directory**: `server`
+- **Root Directory**: leave empty (repository root)
 - **Build Command**: `npm install`
 - **Start Command**: `npm start`
+- **Health Check Path**: `/api/health`
 
-Set these environment variables in Render:
+This project root build installs server dependencies, builds the React client, and serves the built frontend from Express.
+
+### 2. Environment Variables
+
+Set these in Render:
 
 - `MONGO_URI` = your MongoDB Atlas connection string
 - `JWT_SECRET` = a long random secret
-- `CLIENT_URL` = your frontend Render URL (for CORS and Stripe redirects)
 - `STRIPE_SECRET_KEY` = your Stripe secret key (required for checkout)
+- `CLIENT_URL` = your Render app URL (example: `https://spheredigital.onrender.com`)
 - `PORT` is automatically provided by Render
-
-### 2. Frontend Service (Render Static Site)
-
-- **Root Directory**: `client`
-- **Build Command**: `npm install && npm run build`
-- **Publish Directory**: `build`
-
-Set this environment variable in Render Static Site:
-
-- `REACT_APP_API_URL` = your backend URL + `/api`
-
-Example:
-
-```bash
-REACT_APP_API_URL=https://sphere-digital-api.onrender.com/api
-```
 
 ### 3. MongoDB
 

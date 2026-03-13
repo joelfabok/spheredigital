@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
 
 const contactRoutes = require('./routes/contact');
 const projectRoutes = require('./routes/projects');
@@ -10,6 +12,8 @@ const contentRoutes = require('./routes/content');
 const templateRoutes = require('./routes/templates');
 
 const app = express();
+const clientBuildPath = path.join(__dirname, '..', 'client', 'build');
+const hasClientBuild = fs.existsSync(path.join(clientBuildPath, 'index.html'));
 
 // Middleware
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000' }));
@@ -23,8 +27,18 @@ app.use('/api/content', contentRoutes);
 app.use('/api/templates', templateRoutes);
 
 // Health check
-app.get('/', (req, res) => res.json({ message: 'Sphere Digital API is live', health: '/api/health' }));
 app.get('/api/health', (req, res) => res.json({ status: 'Sphere Digital API running' }));
+
+if (hasClientBuild) {
+  app.use(express.static(clientBuildPath));
+
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    return res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+} else {
+  app.get('/', (req, res) => res.json({ message: 'Sphere Digital API is live', health: '/api/health' }));
+}
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
