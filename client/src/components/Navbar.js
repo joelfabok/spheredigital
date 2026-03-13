@@ -15,7 +15,7 @@ export default function Navbar() {
   if (isAdmin) return null;
 
   return (
-    <nav className={scrolled ? 'scrolled' : ''}>
+    <nav className={`site-nav ${scrolled ? 'scrolled' : ''}`}>
       <Link to="/" className="nav-logo">Sphere<span>.</span></Link>
       <ul className="nav-links">
         <li><a href="/#services">Services</a></li>

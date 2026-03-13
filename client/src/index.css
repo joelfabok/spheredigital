@@ -82,7 +82,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 300; color: var(--wh
 .container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
 
 /* Nav */
-nav {
+.site-nav {
   position: fixed; top: 0; left: 0; right: 0;
   z-index: 100;
   padding: 1.5rem 3rem;
@@ -90,7 +90,7 @@ nav {
   border-bottom: 1px solid transparent;
   transition: all 0.4s ease;
 }
-nav.scrolled {
+.site-nav.scrolled {
   background: rgba(8,8,8,0.92);
   backdrop-filter: blur(20px);
   border-bottom-color: var(--border);
@@ -1014,7 +1014,7 @@ footer {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-top: 5.8rem;
+  margin-top: 0.1rem;
   width: 100%;
   align-items: flex-start;
 }
@@ -1156,7 +1156,7 @@ footer {
 
 /* Responsive */
 @media (max-width: 768px) {
-  nav { padding: 1rem 1.5rem; }
+  .site-nav { padding: 1rem 1.5rem; }
   .nav-links { display: none; }
   .hero, .services, .work, .templates, .contact { padding: 6rem 1.5rem 4rem; }
   .stats { padding: 4rem 1.5rem; }
