@@ -1,10 +1,15 @@
 const express = require('express');
 const Stripe = require('stripe');
+const multer = require('multer');
 const Template = require('../models/Template');
 const authMiddleware = require('../middleware/auth');
 const adminMiddleware = require('../middleware/admin');
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }
+});
 
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -41,6 +46,39 @@ router.post('/r2-presign', authMiddleware, adminMiddleware, async (req, res) => 
     res.json({ uploadUrl, publicUrl });
   } catch (err) {
     res.status(500).json({ message: 'Could not generate upload URL', error: err.message });
+  }
+});
+
+// POST /api/templates/upload - Upload template file to R2 via server (admin only)
+router.post('/upload', authMiddleware, adminMiddleware, upload.single('file'), async (req, res) => {
+  try {
+    const r2 = getR2Client();
+    if (!r2) {
+      return res.status(503).json({
+        message: 'R2 is not configured. Add R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL to your server env.'
+      });
+    }
+
+    const file = req.file;
+    if (!file) return res.status(400).json({ message: 'file is required' });
+
+    const safeName = String(file.originalname || 'file.bin').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const key = `templates/${Date.now()}-${safeName}`;
+    const bucket = process.env.R2_BUCKET_NAME;
+
+    const command = new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype || 'application/octet-stream'
+    });
+
+    await r2.send(command);
+
+    const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+    return res.json({ publicUrl });
+  } catch (err) {
+    return res.status(500).json({ message: 'Could not upload template file', error: err.message });
   }
 });
 

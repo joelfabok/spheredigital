@@ -563,15 +563,13 @@ export default function Admin() {
     if (!file) return;
     setTemplateFileUpload('uploading');
     try {
-      const { data } = await API.post('/templates/r2-presign', {
-        filename: file.name,
-        contentType: file.type || 'application/octet-stream',
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const { data } = await API.post('/templates/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      await fetch(data.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
-      });
+
       setTemplateForm(prev => ({ ...prev, downloadUrl: data.publicUrl }));
       setTemplateFileUpload('done');
       setTimeout(() => setTemplateFileUpload('idle'), 2000);
