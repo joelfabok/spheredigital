@@ -19,6 +19,7 @@ import {
   deleteTemplate
 } from '../services/api';
 import { normalizeImageUrl } from '../utils/imageUrl';
+import API from '../services/api';
 
 function Sidebar() {
   const { logout } = useAuth();
@@ -151,6 +152,7 @@ export default function Admin() {
     templateHtml: 'idle',
     error: ''
   });
+  const [templateFileUpload, setTemplateFileUpload] = useState('idle');
 
   useEffect(() => {
     Promise.all([getContacts(), getProjects(), getHomeContent(), getAdminTemplates()])
@@ -555,6 +557,31 @@ export default function Admin() {
   };
 
   const newContacts = contacts.filter(c => c.status === 'new').length;
+
+  const handleTemplateFileUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setTemplateFileUpload('uploading');
+    try {
+      const { data } = await API.post('/templates/r2-presign', {
+        filename: file.name,
+        contentType: file.type || 'application/octet-stream',
+      });
+      await fetch(data.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      setTemplateForm(prev => ({ ...prev, downloadUrl: data.publicUrl }));
+      setTemplateFileUpload('done');
+      setTimeout(() => setTemplateFileUpload('idle'), 2000);
+    } catch {
+      setTemplateFileUpload('error');
+      setTimeout(() => setTemplateFileUpload('idle'), 3000);
+    } finally {
+      event.target.value = '';
+    }
+  };
 
   const filteredContacts = useMemo(() => {
     const query = contactSearch.trim().toLowerCase();
@@ -1131,6 +1158,18 @@ export default function Admin() {
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label>Download URL</label>
                   <input value={templateForm.downloadUrl} onChange={(e) => setTemplateForm(prev => ({ ...prev, downloadUrl: e.target.value }))} placeholder="https://.../template.zip" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                    <input
+                      type="file"
+                      accept=".zip,.html,.htm"
+                      onChange={handleTemplateFileUpload}
+                      disabled={templateFileUpload === 'uploading'}
+                      style={{ fontSize: '0.75rem', color: 'var(--text-mid)' }}
+                    />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.66rem', color: templateFileUpload === 'error' ? 'var(--accent)' : 'var(--text-dim)' }}>
+                      {templateFileUpload === 'uploading' ? 'Uploading to R2...' : templateFileUpload === 'done' ? '✓ Uploaded — URL filled' : templateFileUpload === 'error' ? 'Upload failed (check R2 config)' : 'Or upload to R2'}
+                    </span>
+                  </div>
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label>Preview URL (optional)</label>

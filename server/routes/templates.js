@@ -6,6 +6,44 @@ const adminMiddleware = require('../middleware/admin');
 
 const router = express.Router();
 
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+const getR2Client = () => {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  if (!accountId) return null;
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    },
+  });
+};
+
+// POST /api/templates/r2-presign - Generate presigned upload URL (admin only)
+router.post('/r2-presign', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const r2 = getR2Client();
+    if (!r2) return res.status(503).json({ message: 'R2 is not configured. Add R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and R2_PUBLIC_URL to your server env.' });
+
+    const { filename, contentType } = req.body;
+    if (!filename) return res.status(400).json({ message: 'filename is required' });
+
+    const key = `templates/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const bucket = process.env.R2_BUCKET_NAME;
+
+    const command = new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType || 'application/octet-stream' });
+    const uploadUrl = await getSignedUrl(r2, command, { expiresIn: 300 });
+    const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+
+    res.json({ uploadUrl, publicUrl });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not generate upload URL', error: err.message });
+  }
+});
+
 const getStripeSecretKey = () => {
   return process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET || process.env.STRIPE_API_KEY || '';
 };
