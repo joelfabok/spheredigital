@@ -1169,12 +1169,19 @@ footer {
   align-items: flex-start;
 }
 .admin-main { padding: 2rem; }
+.admin-main-content { padding-top: 3rem; }
 .admin-sidebar-head {
   width: 100%;
   padding-bottom: 1.35rem;
   border-bottom: 1px solid var(--border);
   margin-bottom: 1.4rem;
   flex-shrink: 0;
+}
+.admin-sidebar-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
 }
 .admin-nav {
   display: flex;
@@ -1212,6 +1219,17 @@ footer {
   display: block;
   width: 100%;
   margin-bottom: 0.35rem;
+}
+.admin-nav-toggle {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-mid);
+  padding: 0.45rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
 .admin-brand {
   font-family: var(--font-display);
@@ -1253,6 +1271,26 @@ footer {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 2rem;
+}
+.admin-stats-grid-overview {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.admin-new-email-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+  background: rgba(201, 169, 110, 0.08);
+  border: 1px solid rgba(201, 169, 110, 0.35);
+  padding: 0.75rem 0.8rem;
+}
+.admin-contact-controls {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
 }
 .admin-form-grid {
   display: grid;
@@ -1306,18 +1344,34 @@ footer {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 0.45rem;
+    margin-top: 0;
+    width: 100%;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.2s ease, margin-top 0.2s ease;
+  }
+  .admin-nav.open {
+    max-height: 420px;
+    opacity: 1;
     margin-top: 0.75rem;
   }
   .admin-nav a {
     min-width: 0;
     font-size: 0.68rem;
   }
+  .admin-nav-toggle {
+    display: inline-block;
+  }
   .admin-signout-btn {
     margin-top: 0.8rem;
     width: auto;
   }
   .admin-main { padding: 1.25rem; }
+  .admin-main-content { padding-top: 1.8rem; }
   .admin-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-stats-grid-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-contact-controls { grid-template-columns: 1fr; }
 }
 
 /* Responsive */
@@ -1368,8 +1422,9 @@ footer {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 0.4rem;
-    margin-top: 0.3rem;
+    margin-top: 0;
   }
+  .admin-nav.open { margin-top: 0.3rem; }
   .admin-nav a {
     white-space: nowrap;
     font-size: 0.62rem;
@@ -1377,8 +1432,15 @@ footer {
     min-width: 0;
   }
   .admin-main { padding: 1rem; }
+  .admin-main-content { padding-top: 1.2rem; }
   .admin-stats-grid,
   .admin-form-grid { grid-template-columns: 1fr; }
+  .admin-stats-grid-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-new-email-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .admin-contact-controls { grid-template-columns: 1fr; }
   .admin-table { min-width: 640px; }
   .admin-signout-btn {
     margin-top: 0.5rem;
@@ -1386,6 +1448,10 @@ footer {
     font-size: 0.6rem;
     padding: 0.55rem 0.6rem;
   }
+}
+
+@media (max-width: 480px) {
+  .admin-stats-grid-overview { grid-template-columns: 1fr; }
 }
 
 @media (hover: none), (pointer: coarse) {

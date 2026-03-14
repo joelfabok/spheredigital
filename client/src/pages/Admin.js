@@ -23,26 +23,38 @@ import { normalizeImageUrl } from '../utils/imageUrl';
 function Sidebar() {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const handleLogout = () => { logout(); navigate('/admin/login'); };
 
   return (
     <div className="admin-sidebar">
       <div className="admin-sidebar-head">
-        <Link to="/" className="admin-brand-link">
-          <h2 className="admin-brand">
-            Sphere<span style={{ color: 'var(--accent)' }}>.</span>
-          </h2>
-        </Link>
+        <div className="admin-sidebar-head-row">
+          <Link to="/" className="admin-brand-link">
+            <h2 className="admin-brand">
+              Sphere<span style={{ color: 'var(--accent)' }}>.</span>
+            </h2>
+          </Link>
+          <button
+            type="button"
+            className="admin-nav-toggle"
+            onClick={() => setIsMobileNavOpen((prev) => !prev)}
+            aria-label="Toggle admin navigation"
+            aria-expanded={isMobileNavOpen}
+          >
+            {isMobileNavOpen ? 'Close' : 'Menu'}
+          </button>
+        </div>
         <p className="admin-subtitle">Admin Panel</p>
       </div>
-      <nav className="admin-nav">
-        <a href="#overview">Overview</a>
-        <a href="#account-settings">Account</a>
-        <a href="#homepage-content">Homepage</a>
-        <a href="#project-showcase-manager">Projects</a>
-        <a href="#template-store-manager">Templates</a>
-        <a href="#template-sales">Sales</a>
-        <a href="#recent-contacts">Contacts</a>
+      <nav className={`admin-nav ${isMobileNavOpen ? 'open' : ''}`}>
+        <a href="#overview" onClick={() => setIsMobileNavOpen(false)}>Overview</a>
+        <a href="#account-settings" onClick={() => setIsMobileNavOpen(false)}>Account</a>
+        <a href="#homepage-content" onClick={() => setIsMobileNavOpen(false)}>Homepage</a>
+        <a href="#project-showcase-manager" onClick={() => setIsMobileNavOpen(false)}>Projects</a>
+        <a href="#template-store-manager" onClick={() => setIsMobileNavOpen(false)}>Templates</a>
+        <a href="#template-sales" onClick={() => setIsMobileNavOpen(false)}>Sales</a>
+        <a href="#recent-contacts" onClick={() => setIsMobileNavOpen(false)}>Contacts</a>
       </nav>
       <button onClick={handleLogout} className="admin-signout-btn">
         Sign Out
@@ -677,7 +689,7 @@ export default function Admin() {
   return (
     <div className="admin-layout">
       <Sidebar />
-      <div className="admin-main" style={{ paddingTop: '3rem' }}>
+      <div className="admin-main admin-main-content">
         <div id="overview" style={{ marginBottom: '2rem' }}>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.3em', color: 'var(--accent)', textTransform: 'uppercase' }}>Welcome back</p>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.5rem', marginTop: '0.3rem' }}>Dashboard</h1>
@@ -685,14 +697,15 @@ export default function Admin() {
 
         {loading ? <div className="page-loading">Loading...</div> : (
           <>
-            <div className="admin-stats-grid">
+            <div className="admin-stats-grid admin-stats-grid-overview">
               {[
                 { label: 'Total Contacts', value: contacts.length },
                 { label: 'New Inquiries', value: newContacts, highlight: true },
+                { label: 'Total Products', value: templates.length },
                 { label: 'Total Projects', value: projects.length },
               ].map(stat => (
                 <div key={stat.label} className="admin-card" style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '3rem', color: stat.highlight ? 'var(--accent)' : 'var(--white)' }}>{stat.value}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.35rem', color: stat.highlight ? 'var(--accent)' : 'var(--white)' }}>{stat.value}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '0.3rem' }}>{stat.label}</div>
                 </div>
               ))}
@@ -837,16 +850,7 @@ export default function Admin() {
               </p>
 
               {newContacts > 0 && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '0.8rem',
-                  marginBottom: '0.9rem',
-                  background: 'rgba(201, 169, 110, 0.08)',
-                  border: '1px solid rgba(201, 169, 110, 0.35)',
-                  padding: '0.75rem 0.8rem'
-                }}>
+                <div className="admin-new-email-banner">
                   <p style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                     {newContacts} new {newContacts === 1 ? 'email' : 'emails'} waiting
                   </p>
@@ -869,7 +873,7 @@ export default function Admin() {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '0.8rem', marginBottom: '0.9rem' }}>
+              <div className="admin-contact-controls">
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Search contacts</label>
                   <input
