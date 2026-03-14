@@ -6,6 +6,10 @@ const adminMiddleware = require('../middleware/admin');
 
 const router = express.Router();
 
+const getStripeSecretKey = () => {
+  return process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET || process.env.STRIPE_API_KEY || '';
+};
+
 const fallbackTemplates = [
   {
     _id: 'fallback-1',
@@ -114,11 +118,14 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
 // POST /api/templates/checkout - Create Stripe checkout session
 router.post('/checkout', async (req, res) => {
   try {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return res.status(500).json({ message: 'Stripe is not configured. Add STRIPE_SECRET_KEY to server env.' });
+    const stripeSecretKey = getStripeSecretKey();
+    if (!stripeSecretKey) {
+      return res.status(500).json({
+        message: 'Stripe is not configured. Add STRIPE_SECRET_KEY (or STRIPE_SECRET / STRIPE_API_KEY) to server env.'
+      });
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(stripeSecretKey);
     const items = Array.isArray(req.body.items) ? req.body.items : [];
 
     if (items.length === 0) {
@@ -189,8 +196,11 @@ router.post('/checkout', async (req, res) => {
 // GET /api/templates/delivery/:sessionId - Paid template delivery for successful checkout
 router.get('/delivery/:sessionId', async (req, res) => {
   try {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return res.status(500).json({ message: 'Stripe is not configured. Add STRIPE_SECRET_KEY to server env.' });
+    const stripeSecretKey = getStripeSecretKey();
+    if (!stripeSecretKey) {
+      return res.status(500).json({
+        message: 'Stripe is not configured. Add STRIPE_SECRET_KEY (or STRIPE_SECRET / STRIPE_API_KEY) to server env.'
+      });
     }
 
     const sessionId = String(req.params.sessionId || '').trim();
@@ -198,7 +208,7 @@ router.get('/delivery/:sessionId', async (req, res) => {
       return res.status(400).json({ message: 'Missing session id' });
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(stripeSecretKey);
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     if (!session || session.mode !== 'payment') {
@@ -253,7 +263,8 @@ router.get('/delivery/:sessionId', async (req, res) => {
 // GET /api/templates/admin/sales - Sales summary by template (admin)
 router.get('/admin/sales', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    if (!process.env.STRIPE_SECRET_KEY) {
+    const stripeSecretKey = getStripeSecretKey();
+    if (!stripeSecretKey) {
       return res.json({
         data: [],
         summary: {
@@ -262,11 +273,11 @@ router.get('/admin/sales', authMiddleware, adminMiddleware, async (req, res) => 
           totalRevenue: 0,
           topSeller: null
         },
-        message: 'Stripe is not configured. Add STRIPE_SECRET_KEY to enable sales analytics.'
+        message: 'Stripe is not configured. Add STRIPE_SECRET_KEY (or STRIPE_SECRET / STRIPE_API_KEY) to enable sales analytics.'
       });
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(stripeSecretKey);
     const templates = await Template.find({}).lean();
 
     const templatesById = new Map(templates.map((t) => [String(t._id), t]));
