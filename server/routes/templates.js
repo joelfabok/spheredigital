@@ -1,7 +1,9 @@
 const express = require('express');
 const Stripe = require('stripe');
 const multer = require('multer');
+const crypto = require('crypto');
 const Template = require('../models/Template');
+const TemplatePageView = require('../models/TemplatePageView');
 const authMiddleware = require('../middleware/auth');
 const adminMiddleware = require('../middleware/admin');
 
@@ -86,6 +88,23 @@ const getStripeSecretKey = () => {
   return process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET || process.env.STRIPE_API_KEY || '';
 };
 
+const TEMPLATE_STORE_PAGE_KEY = 'templates-store';
+
+const getStartOfUtcDay = () => {
+  const day = new Date();
+  day.setUTCHours(0, 0, 0, 0);
+  return day;
+};
+
+const getVisitorHash = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  const ip = Array.isArray(forwarded)
+    ? forwarded[0]
+    : String(forwarded || req.ip || req.socket?.remoteAddress || '').split(',')[0].trim();
+  const ua = String(req.headers['user-agent'] || '').trim();
+  return crypto.createHash('sha1').update(`${ip}|${ua}`).digest('hex');
+};
+
 const fallbackTemplates = [
   {
     _id: 'fallback-1',
@@ -145,6 +164,81 @@ router.get('/', async (req, res) => {
   } catch {
     // Graceful fallback if DB is offline.
     res.json(fallbackTemplates);
+  }
+});
+
+// POST /api/templates/views/track - Track template marketplace page view
+router.post('/views/track', async (req, res) => {
+  try {
+    const rawPage = String(req.body?.page || TEMPLATE_STORE_PAGE_KEY).trim().toLowerCase();
+    const page = rawPage || TEMPLATE_STORE_PAGE_KEY;
+    const day = getStartOfUtcDay();
+
+    const baseline = await TemplatePageView.findOneAndUpdate(
+      { page, day },
+      {
+        $setOnInsert: { page, day, totalViews: 0, uniqueViews: 0, uniqueVisitorHashes: [] },
+        $inc: { totalViews: 1 }
+      },
+      { new: true, upsert: true }
+    );
+
+    const visitorHash = getVisitorHash(req);
+    const uniqueUpdate = await TemplatePageView.updateOne(
+      { _id: baseline._id, uniqueVisitorHashes: { $ne: visitorHash } },
+      {
+        $inc: { uniqueViews: 1 },
+        $push: { uniqueVisitorHashes: visitorHash }
+      }
+    );
+
+    return res.json({
+      tracked: true,
+      page,
+      totalViews: baseline.totalViews,
+      uniqueAdded: uniqueUpdate.modifiedCount > 0
+    });
+  } catch {
+    // Never block page use when analytics storage is unavailable.
+    return res.status(202).json({ tracked: false });
+  }
+});
+
+// GET /api/templates/admin/views - Template marketplace view analytics (admin)
+router.get('/admin/views', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const page = TEMPLATE_STORE_PAGE_KEY;
+    const rows = await TemplatePageView.find({ page }).sort({ day: -1 }).limit(30).lean();
+
+    const summary = rows.reduce(
+      (acc, row) => {
+        acc.totalViews += Number(row.totalViews || 0);
+        acc.uniqueViews += Number(row.uniqueViews || 0);
+        return acc;
+      },
+      { totalViews: 0, uniqueViews: 0 }
+    );
+
+    const today = getStartOfUtcDay().getTime();
+    const todayRow = rows.find((row) => new Date(row.day).getTime() === today);
+
+    const data = rows.map((row) => ({
+      date: row.day,
+      totalViews: Number(row.totalViews || 0),
+      uniqueViews: Number(row.uniqueViews || 0)
+    }));
+
+    return res.json({
+      data,
+      summary: {
+        totalViews: summary.totalViews,
+        uniqueViews: summary.uniqueViews,
+        todayViews: Number(todayRow?.totalViews || 0),
+        todayUniqueViews: Number(todayRow?.uniqueViews || 0)
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Could not load template view analytics', error: err.message });
   }
 });
 

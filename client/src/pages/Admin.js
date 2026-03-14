@@ -14,6 +14,7 @@ import {
   updateAdminAccount,
   getAdminTemplates,
   getTemplateSalesStats,
+  getTemplateViewStats,
   createTemplate,
   updateTemplate,
   deleteTemplate
@@ -55,6 +56,7 @@ function Sidebar() {
         <a href="#project-showcase-manager" onClick={() => setIsMobileNavOpen(false)}>Projects</a>
         <a href="#template-store-manager" onClick={() => setIsMobileNavOpen(false)}>Templates</a>
         <a href="#template-sales" onClick={() => setIsMobileNavOpen(false)}>Sales</a>
+        <a href="#template-views" onClick={() => setIsMobileNavOpen(false)}>Views</a>
         <a href="#recent-contacts" onClick={() => setIsMobileNavOpen(false)}>Contacts</a>
       </nav>
       <button onClick={handleLogout} className="admin-signout-btn">
@@ -115,6 +117,15 @@ export default function Admin() {
   const [salesRows, setSalesRows] = useState([]);
   const [salesSearch, setSalesSearch] = useState('');
   const [salesMessage, setSalesMessage] = useState('');
+  const [viewStatus, setViewStatus] = useState('idle');
+  const [viewMessage, setViewMessage] = useState('');
+  const [viewRows, setViewRows] = useState([]);
+  const [viewSummary, setViewSummary] = useState({
+    totalViews: 0,
+    uniqueViews: 0,
+    todayViews: 0,
+    todayUniqueViews: 0
+  });
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [projectForm, setProjectForm] = useState({
@@ -189,6 +200,35 @@ export default function Admin() {
     };
 
     loadSales();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadViewStats = async () => {
+      setViewStatus('loading');
+      try {
+        const response = await getTemplateViewStats();
+        if (cancelled) return;
+        setViewRows(response.data?.data || []);
+        setViewSummary(response.data?.summary || {
+          totalViews: 0,
+          uniqueViews: 0,
+          todayViews: 0,
+          todayUniqueViews: 0
+        });
+        setViewMessage(response.data?.message || '');
+        setViewStatus('ready');
+      } catch {
+        if (cancelled) return;
+        setViewStatus('error');
+      }
+    };
+
+    loadViewStats();
     return () => {
       cancelled = true;
     };
@@ -728,6 +768,7 @@ export default function Admin() {
                 { label: 'New Inquiries', value: newContacts, highlight: true },
                 { label: 'Total Products', value: templates.length },
                 { label: 'Total Projects', value: projects.length },
+                { label: 'Template Page Views', value: viewSummary.totalViews || 0 },
               ].map(stat => (
                 <div key={stat.label} className="admin-card" style={{ textAlign: 'center' }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.35rem', color: stat.highlight ? 'var(--accent)' : 'var(--white)' }}>{stat.value}</div>
@@ -1361,6 +1402,69 @@ export default function Admin() {
                       <tr>
                         <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-mid)', padding: '1rem' }}>
                           {salesRows.length === 0 ? 'No sold templates yet.' : 'No sales match your search.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="admin-card" id="template-views">
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: '1rem' }}>Template Page Views</h3>
+              <p style={{ color: 'var(--text-mid)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                Daily traffic to the public templates marketplace page.
+              </p>
+
+              <div className="admin-stats-grid" style={{ marginBottom: '1rem' }}>
+                <div className="admin-card" style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--white)' }}>{viewSummary.totalViews || 0}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Total Views (30d)</div>
+                </div>
+                <div className="admin-card" style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--white)' }}>{viewSummary.uniqueViews || 0}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Unique Views (30d)</div>
+                </div>
+                <div className="admin-card" style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--accent)' }}>{viewSummary.todayViews || 0}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Today Views</div>
+                </div>
+                <div className="admin-card" style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--accent)' }}>{viewSummary.todayUniqueViews || 0}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Today Unique</div>
+                </div>
+              </div>
+
+              {viewMessage && (
+                <p style={{ color: 'var(--text-mid)', fontSize: '0.8rem', marginBottom: '1rem' }}>{viewMessage}</p>
+              )}
+
+              {viewStatus === 'loading' && (
+                <p style={{ color: 'var(--text-mid)', fontSize: '0.8rem', marginBottom: '1rem' }}>Loading view analytics...</p>
+              )}
+
+              {viewStatus === 'error' && (
+                <p style={{ color: '#e05', fontSize: '0.8rem', marginBottom: '1rem' }}>Could not load view analytics.</p>
+              )}
+
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th><th>Total Views</th><th>Unique Views</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewRows.length > 0 ? viewRows.map((row) => (
+                      <tr key={String(row.date)}>
+                        <td style={{ color: 'var(--text-mid)' }}>{row.date ? new Date(row.date).toLocaleDateString() : '-'}</td>
+                        <td>{row.totalViews || 0}</td>
+                        <td>{row.uniqueViews || 0}</td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-mid)', padding: '1rem' }}>
+                          No view data yet.
                         </td>
                       </tr>
                     )}

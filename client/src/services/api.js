@@ -27,8 +27,10 @@ export const getHomeContent = () => API.get('/content/home');
 export const updateHomeContent = (data) => API.put('/content/home', data);
 
 export const getTemplates = () => API.get('/templates');
+export const trackTemplatePageView = (page = 'templates-store') => API.post('/templates/views/track', { page });
 export const getAdminTemplates = () => API.get('/templates/admin');
 export const getTemplateSalesStats = () => API.get('/templates/admin/sales');
+export const getTemplateViewStats = () => API.get('/templates/admin/views');
 export const createTemplate = (data) => API.post('/templates', data);
 export const updateTemplate = (id, data) => API.put(`/templates/${id}`, data);
 export const deleteTemplate = (id) => API.delete(`/templates/${id}`);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { checkoutTemplates, getTemplates } from '../services/api';
+import { checkoutTemplates, getTemplates, trackTemplatePageView } from '../services/api';
 import { useCart } from '../context/CartContext';
 import { normalizeImageUrl } from '../utils/imageUrl';
 
@@ -20,6 +20,10 @@ export default function Templates() {
       .then(res => setTemplates(res.data || []))
       .catch(() => setError('Could not load templates right now.'))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    trackTemplatePageView('templates-store').catch(() => null);
   }, []);
 
   const checkoutStatus = searchParams.get('status');
