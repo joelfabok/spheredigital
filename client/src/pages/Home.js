@@ -209,7 +209,7 @@ export default function Home() {
         <h2 className="section-title fade-up">Buy ready-made <em>website templates</em></h2>
         {displayTemplatePacks.length === 0 ? (
           <div className="template-empty fade-up">
-            No templates uploaded yet. Add templates in Admin to show them here.
+            No templates uploaded yet.
           </div>
         ) : (
           <div className="templates-grid">
