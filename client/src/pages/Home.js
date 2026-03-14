@@ -6,7 +6,7 @@ import { normalizeImageUrl } from '../utils/imageUrl';
 const SERVICES = [
   { num: '01', icon: '🤖', title: 'Chat System', desc: 'Custom bots that engage communities, automate moderation, run events, and create unforgettable server experiences.' },
   { num: '02', icon: '🌐', title: 'Web Applications', desc: 'Full-stack platforms built with React and Node.js — scalable, performant, and beautifully designed.' },
-  { num: '03', icon: '📚', title: 'Course Platforms', desc: 'End-to-end digital course ecosystems with payments, progress tracking, video delivery, and community.' },
+  { num: '03', icon: '🖥️', title: 'Website Templates', desc: 'Ready-to-launch website templates tailored for modern brands, with fast setup, responsive layouts, and clean design systems.' },
   { num: '04', icon: '📅', title: 'Scheduling Systems', desc: 'Intelligent scheduling tools that eliminate friction for businesses managing appointments, staff, or resources.' },
 ];
 
