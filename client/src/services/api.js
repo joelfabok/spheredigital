@@ -12,6 +12,7 @@ API.interceptors.request.use(config => {
 export const submitContact = (data) => API.post('/contact', data);
 export const getContacts = () => API.get('/contact');
 export const updateContactStatus = (id, status) => API.patch(`/contact/${id}`, { status });
+export const replyToContact = (id, data) => API.post(`/contact/${id}/reply`, data);
 
 export const getProjects = (params) => API.get('/projects', { params });
 export const createProject = (data) => API.post('/projects', data);
@@ -27,6 +28,7 @@ export const updateHomeContent = (data) => API.put('/content/home', data);
 
 export const getTemplates = () => API.get('/templates');
 export const getAdminTemplates = () => API.get('/templates/admin');
+export const getTemplateSalesStats = () => API.get('/templates/admin/sales');
 export const createTemplate = (data) => API.post('/templates', data);
 export const updateTemplate = (id, data) => API.put(`/templates/${id}`, data);
 export const deleteTemplate = (id) => API.delete(`/templates/${id}`);

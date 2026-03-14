@@ -256,7 +256,7 @@ export default function Home() {
             <p className="fade-up">Tell us about your project. We'll get back to you within 24 hours with a plan to make it happen.</p>
             <div className="contact-detail fade-up">
               <span>✉</span>
-              <a href="mailto:hello@spheredigital.io">hello@spheredigital.io</a>
+              <a href="mailto:spheredigital12@gmail.com">Spheredigital12@gmail.com</a>
             </div>
             <div className="contact-detail fade-up">
               <span>◎</span>

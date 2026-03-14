@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   getContacts,
+  updateContactStatus,
+  replyToContact,
   getProjects,
   createProject,
   updateProject,
@@ -11,6 +13,7 @@ import {
   updateHomeContent,
   updateAdminAccount,
   getAdminTemplates,
+  getTemplateSalesStats,
   createTemplate,
   updateTemplate,
   deleteTemplate
@@ -38,6 +41,7 @@ function Sidebar() {
         <a href="#homepage-content">Homepage</a>
         <a href="#project-showcase-manager">Projects</a>
         <a href="#template-store-manager">Templates</a>
+        <a href="#template-sales">Sales</a>
         <a href="#recent-contacts">Contacts</a>
       </nav>
       <button onClick={handleLogout} className="admin-signout-btn">
@@ -54,6 +58,16 @@ export default function Admin() {
   const hasCloudinaryConfig = Boolean(cloudinaryCloudName && cloudinaryUploadPreset);
 
   const [contacts, setContacts] = useState([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [contactStatusFilter, setContactStatusFilter] = useState('all');
+  const [contactVisibleCount, setContactVisibleCount] = useState(8);
+  const [contactUpdatingId, setContactUpdatingId] = useState('');
+  const [contactActionError, setContactActionError] = useState('');
+  const [activeContact, setActiveContact] = useState(null);
+  const [replySubject, setReplySubject] = useState('');
+  const [replyMessage, setReplyMessage] = useState('');
+  const [replyStatus, setReplyStatus] = useState('idle');
+  const [replyError, setReplyError] = useState('');
   const [projects, setProjects] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [homeContent, setHomeContent] = useState({
@@ -78,6 +92,16 @@ export default function Admin() {
   });
   const [templateStatus, setTemplateStatus] = useState('idle');
   const [projectStatus, setProjectStatus] = useState('idle');
+  const [salesStatus, setSalesStatus] = useState('idle');
+  const [salesSummary, setSalesSummary] = useState({
+    paidSessions: 0,
+    totalUnitsSold: 0,
+    totalRevenue: 0,
+    topSeller: null
+  });
+  const [salesRows, setSalesRows] = useState([]);
+  const [salesSearch, setSalesSearch] = useState('');
+  const [salesMessage, setSalesMessage] = useState('');
   const [editingProjectId, setEditingProjectId] = useState(null);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [projectForm, setProjectForm] = useState({
@@ -125,6 +149,35 @@ export default function Admin() {
         setHomeContent(prev => ({ ...prev, ...hc.data }));
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSales = async () => {
+      setSalesStatus('loading');
+      try {
+        const response = await getTemplateSalesStats();
+        if (cancelled) return;
+        setSalesRows(response.data?.data || []);
+        setSalesSummary(response.data?.summary || {
+          paidSessions: 0,
+          totalUnitsSold: 0,
+          totalRevenue: 0,
+          topSeller: null
+        });
+        setSalesMessage(response.data?.message || '');
+        setSalesStatus('ready');
+      } catch {
+        if (cancelled) return;
+        setSalesStatus('error');
+      }
+    };
+
+    loadSales();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -491,6 +544,136 @@ export default function Admin() {
 
   const newContacts = contacts.filter(c => c.status === 'new').length;
 
+  const filteredContacts = useMemo(() => {
+    const query = contactSearch.trim().toLowerCase();
+
+    return contacts.filter((contact) => {
+      const matchesStatus = contactStatusFilter === 'all' || contact.status === contactStatusFilter;
+      if (!matchesStatus) return false;
+
+      if (!query) return true;
+
+      return [
+        contact.name,
+        contact.email,
+        contact.company,
+        contact.service,
+        contact.message
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+  }, [contacts, contactSearch, contactStatusFilter]);
+
+  const visibleContacts = filteredContacts.slice(0, contactVisibleCount);
+
+  const humanizeService = (service) => {
+    return String(service || 'other')
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
+  const truncateText = (text, maxLength = 90) => {
+    const value = String(text || '').trim();
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, maxLength)}...`;
+  };
+
+  const handleUpdateContactStatus = async (contactId, status) => {
+    setContactActionError('');
+    setContactUpdatingId(contactId);
+    try {
+      const updated = await updateContactStatus(contactId, status);
+      setContacts((prev) => prev.map((item) => (item._id === contactId ? updated.data : item)));
+    } catch {
+      setContactActionError('Could not update contact status.');
+    } finally {
+      setContactUpdatingId('');
+    }
+  };
+
+  const openContactModal = async (contact) => {
+    if (!contact) return;
+
+    setActiveContact(contact);
+    setReplyStatus('idle');
+    setReplyError('');
+    setReplySubject(`Re: Your ${humanizeService(contact.service)} inquiry`);
+    setReplyMessage(`Hi ${contact.name || 'there'},\n\nThanks for reaching out to Sphere Digital.\n\n`);
+
+    if (contact.status === 'new') {
+      try {
+        const updated = await updateContactStatus(contact._id, 'read');
+        setContacts((prev) => prev.map((item) => (item._id === contact._id ? updated.data : item)));
+        setActiveContact(updated.data);
+      } catch {
+        setContactActionError('Could not mark message as read.');
+      }
+    }
+  };
+
+  const closeContactModal = () => {
+    setActiveContact(null);
+    setReplyStatus('idle');
+    setReplyError('');
+  };
+
+  const handleSendReply = async () => {
+    if (!activeContact?._id) return;
+
+    const cleanSubject = replySubject.trim();
+    const cleanMessage = replyMessage.trim();
+
+    if (!cleanSubject || !cleanMessage) {
+      setReplyError('Subject and message are required.');
+      setReplyStatus('error');
+      return;
+    }
+
+    setReplyStatus('sending');
+    setReplyError('');
+
+    try {
+      const response = await replyToContact(activeContact._id, {
+        subject: cleanSubject,
+        message: cleanMessage
+      });
+
+      const updatedContact = response.data?.contact;
+      if (updatedContact) {
+        setContacts((prev) => prev.map((item) => (item._id === updatedContact._id ? updatedContact : item)));
+        setActiveContact(updatedContact);
+      }
+
+      setReplyStatus('sent');
+    } catch (error) {
+      setReplyStatus('error');
+      const message = error?.response?.data?.message || 'Could not send reply email.';
+      const detail = error?.response?.data?.details;
+      setReplyError(detail ? `${message} (${detail})` : message);
+    }
+  };
+
+  const filteredSalesRows = useMemo(() => {
+    const query = salesSearch.trim().toLowerCase();
+    if (!query) return salesRows;
+
+    return salesRows.filter((row) => {
+      return [row.name, row.slug, row.category]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query));
+    });
+  }, [salesRows, salesSearch]);
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 2
+    }).format(Number(value || 0));
+  };
+
   return (
     <div className="admin-layout">
       <Sidebar />
@@ -649,30 +832,170 @@ export default function Admin() {
 
             <div className="admin-card" id="recent-contacts">
               <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: '1rem' }}>Recent Contacts</h3>
+              <p style={{ color: 'var(--text-mid)', marginBottom: '0.8rem', fontSize: '0.85rem' }}>
+                Search and triage incoming inquiries without leaving the dashboard.
+              </p>
+
+              {newContacts > 0 && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.8rem',
+                  marginBottom: '0.9rem',
+                  background: 'rgba(201, 169, 110, 0.08)',
+                  border: '1px solid rgba(201, 169, 110, 0.35)',
+                  padding: '0.75rem 0.8rem'
+                }}>
+                  <p style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                    {newContacts} new {newContacts === 1 ? 'email' : 'emails'} waiting
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openContactModal(contacts.find((item) => item.status === 'new'))}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid rgba(201, 169, 110, 0.45)',
+                      color: 'var(--accent)',
+                      padding: '0.35rem 0.6rem',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.62rem',
+                      letterSpacing: '0.11em',
+                      textTransform: 'uppercase'
+                    }}
+                  >
+                    Open Latest
+                  </button>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '0.8rem', marginBottom: '0.9rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Search contacts</label>
+                  <input
+                    value={contactSearch}
+                    onChange={(e) => {
+                      setContactSearch(e.target.value);
+                      setContactVisibleCount(8);
+                    }}
+                    placeholder="Name, email, company, service, message"
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Status filter</label>
+                  <select
+                    value={contactStatusFilter}
+                    onChange={(e) => {
+                      setContactStatusFilter(e.target.value);
+                      setContactVisibleCount(8);
+                    }}
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="new">New</option>
+                    <option value="read">Read</option>
+                    <option value="replied">Replied</option>
+                  </select>
+                </div>
+              </div>
+
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.72rem', marginBottom: '0.7rem', fontFamily: 'var(--font-mono)' }}>
+                Showing {visibleContacts.length} of {filteredContacts.length} matching contacts ({contacts.length} total)
+              </p>
+
+              {contactActionError && (
+                <p style={{ color: '#e05', fontSize: '0.75rem', marginBottom: '0.7rem' }}>{contactActionError}</p>
+              )}
+
               <div className="admin-table-wrap">
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Name</th><th>Email</th><th>Service</th><th>Status</th><th>Date</th>
+                      <th>Name</th><th>Email</th><th>Company</th><th>Service</th><th>Message</th><th>Status</th><th>Date</th><th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {contacts.slice(0, 5).map(c => (
+                    {visibleContacts.length > 0 ? visibleContacts.map(c => (
                       <tr key={c._id}>
                         <td>{c.name}</td>
-                        <td style={{ color: 'var(--text-mid)' }}>{c.email}</td>
-                        <td style={{ color: 'var(--text-mid)', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{c.service}</td>
+                        <td style={{ color: 'var(--text-mid)' }}>
+                          <a href={`mailto:${c.email}`} style={{ color: 'inherit', textDecoration: 'none' }}>{c.email}</a>
+                        </td>
+                        <td style={{ color: 'var(--text-mid)' }}>{c.company || '-'}</td>
+                        <td style={{ color: 'var(--text-mid)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>{humanizeService(c.service)}</td>
+                        <td style={{ maxWidth: '340px', color: 'var(--text-mid)' }} title={c.message || ''}>{truncateText(c.message)}</td>
                         <td>
-                          <span className={`badge badge-${c.status}`}>{c.status}</span>
+                          <select
+                            value={c.status}
+                            onChange={(e) => handleUpdateContactStatus(c._id, e.target.value)}
+                            disabled={contactUpdatingId === c._id}
+                            style={{
+                              background: 'var(--card)',
+                              color: 'var(--text)',
+                              border: '1px solid var(--border)',
+                              padding: '0.35rem 0.4rem',
+                              fontSize: '0.7rem',
+                              fontFamily: 'var(--font-mono)',
+                              minWidth: '92px'
+                            }}
+                          >
+                            <option value="new">new</option>
+                            <option value="read">read</option>
+                            <option value="replied">replied</option>
+                          </select>
                         </td>
                         <td style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>
                           {new Date(c.createdAt).toLocaleDateString()}
                         </td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => openContactModal(c)}
+                            style={{
+                              background: 'transparent',
+                              color: 'var(--accent)',
+                              border: '1px solid var(--border)',
+                              padding: '0.35rem 0.55rem',
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.64rem',
+                              letterSpacing: '0.08em',
+                              textTransform: 'uppercase'
+                            }}
+                          >
+                            Open
+                          </button>
+                        </td>
                       </tr>
-                    ))}
+                    )) : (
+                      <tr>
+                        <td colSpan={8} style={{ color: 'var(--text-mid)', textAlign: 'center', padding: '1rem' }}>
+                          No contacts match your current filter.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
+
+              {visibleContacts.length < filteredContacts.length && (
+                <button
+                  type="button"
+                  onClick={() => setContactVisibleCount((prev) => prev + 8)}
+                  style={{
+                    marginTop: '0.9rem',
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-mid)',
+                    padding: '0.55rem 0.9rem',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.65rem',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  Load 8 More
+                </button>
+              )}
             </div>
 
             <div className="admin-card" id="project-showcase-manager">
@@ -922,6 +1245,251 @@ export default function Admin() {
                 </div>
               </div>
             </div>
+
+            <div className="admin-card" id="template-sales">
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', marginBottom: '1rem' }}>Template Sales</h3>
+              <p style={{ color: 'var(--text-mid)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                Search sold templates and quickly identify what has sold the most.
+              </p>
+
+              <div className="admin-stats-grid" style={{ marginBottom: '1rem' }}>
+                <div className="admin-card" style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--white)' }}>{salesSummary.totalUnitsSold || 0}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Units Sold</div>
+                </div>
+                <div className="admin-card" style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--white)' }}>{formatCurrency(salesSummary.totalRevenue || 0)}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Revenue</div>
+                </div>
+                <div className="admin-card" style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', color: 'var(--accent)' }}>{salesSummary.topSeller?.name || '-'}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Top Seller</div>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Search by template name, slug, or category</label>
+                <input
+                  value={salesSearch}
+                  onChange={(e) => setSalesSearch(e.target.value)}
+                  placeholder="Try: studio, portfolio, business"
+                />
+              </div>
+
+              {salesMessage && (
+                <p style={{ color: 'var(--text-mid)', fontSize: '0.8rem', marginBottom: '1rem' }}>{salesMessage}</p>
+              )}
+
+              {salesStatus === 'loading' && (
+                <p style={{ color: 'var(--text-mid)', fontSize: '0.8rem', marginBottom: '1rem' }}>Loading sales analytics...</p>
+              )}
+
+              {salesStatus === 'error' && (
+                <p style={{ color: '#e05', fontSize: '0.8rem', marginBottom: '1rem' }}>Could not load sales analytics.</p>
+              )}
+
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Template</th><th>Category</th><th>Units Sold</th><th>Orders</th><th>Revenue</th><th>Last Sold</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSalesRows.length > 0 ? filteredSalesRows.map((sale) => (
+                      <tr key={`${sale.templateId || sale.name}-${sale.category}`}>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            <span>{sale.name}</span>
+                            {sale.slug ? (
+                              <span style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.64rem' }}>
+                                {sale.slug}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td style={{ color: 'var(--text-mid)' }}>{sale.category || '-'}</td>
+                        <td>{sale.soldCount || 0}</td>
+                        <td>{sale.orderCount || 0}</td>
+                        <td>{formatCurrency(sale.revenue || 0)}</td>
+                        <td style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.7rem' }}>
+                          {sale.lastSoldAt ? new Date(sale.lastSoldAt).toLocaleDateString() : '-'}
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-mid)', padding: '1rem' }}>
+                          {salesRows.length === 0 ? 'No sold templates yet.' : 'No sales match your search.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {activeContact && (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={closeContactModal}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    closeContactModal();
+                    return;
+                  }
+
+                  // Ignore key events bubbled from inputs/textareas to prevent accidental close while typing.
+                  if (e.currentTarget !== e.target) return;
+                }}
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(8, 8, 8, 0.84)',
+                  zIndex: 1600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '1rem'
+                }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    width: 'min(980px, 100%)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--card)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    gap: '1rem',
+                    padding: '1rem'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.6rem', marginBottom: '0.7rem' }}>
+                      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem' }}>Email Details</h3>
+                      <button
+                        type="button"
+                        onClick={closeContactModal}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-mid)',
+                          padding: '0.4rem 0.6rem',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.62rem',
+                          letterSpacing: '0.1em',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.7rem', marginBottom: '0.7rem' }}>
+                      <div style={{ border: '1px solid var(--border)', padding: '0.6rem' }}>
+                        <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>From</p>
+                        <p style={{ marginTop: '0.3rem', color: 'var(--white)' }}>{activeContact.name}</p>
+                      </div>
+                      <div style={{ border: '1px solid var(--border)', padding: '0.6rem' }}>
+                        <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Email</p>
+                        <p style={{ marginTop: '0.3rem', color: 'var(--white)' }}>{activeContact.email}</p>
+                      </div>
+                      <div style={{ border: '1px solid var(--border)', padding: '0.6rem' }}>
+                        <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Service</p>
+                        <p style={{ marginTop: '0.3rem', color: 'var(--white)' }}>{humanizeService(activeContact.service)}</p>
+                      </div>
+                      <div style={{ border: '1px solid var(--border)', padding: '0.6rem' }}>
+                        <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Received</p>
+                        <p style={{ marginTop: '0.3rem', color: 'var(--white)' }}>{new Date(activeContact.createdAt).toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    <div style={{ border: '1px solid var(--border)', padding: '0.75rem' }}>
+                      <p style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: '0.62rem', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.45rem' }}>Message</p>
+                      <p style={{ color: 'var(--text-mid)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{activeContact.message}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', marginBottom: '0.7rem' }}>Reply</h3>
+                    <div className="form-group" style={{ marginBottom: '0.7rem' }}>
+                      <label>Subject</label>
+                      <input
+                        value={replySubject}
+                        onChange={(e) => setReplySubject(e.target.value)}
+                        placeholder="Reply subject"
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '0.7rem' }}>
+                      <label>Message</label>
+                      <textarea
+                        value={replyMessage}
+                        onChange={(e) => setReplyMessage(e.target.value)}
+                        rows={10}
+                        placeholder="Write your reply..."
+                      />
+                    </div>
+
+                    {activeContact.lastReply?.sentAt && (
+                      <p style={{ color: 'var(--text-dim)', fontSize: '0.72rem', marginBottom: '0.6rem', fontFamily: 'var(--font-mono)' }}>
+                        Last reply sent: {new Date(activeContact.lastReply.sentAt).toLocaleString()}
+                      </p>
+                    )}
+
+                    {replyStatus === 'sent' && (
+                      <p style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', marginBottom: '0.6rem' }}>
+                        Reply sent and contact marked as replied.
+                      </p>
+                    )}
+
+                    {(replyError || replyStatus === 'error') && (
+                      <p style={{ color: '#e05', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', marginBottom: '0.6rem' }}>
+                        {replyError || 'Could not send reply.'}
+                      </p>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={handleSendReply}
+                        disabled={replyStatus === 'sending'}
+                        style={{
+                          background: 'var(--accent)',
+                          color: 'var(--black)',
+                          border: 'none',
+                          padding: '0.65rem 0.9rem',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.68rem',
+                          letterSpacing: '0.1em',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        {replyStatus === 'sending' ? 'Sending...' : 'Send Reply'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => window.open(`mailto:${activeContact.email}`, '_blank')}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-mid)',
+                          padding: '0.65rem 0.85rem',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '0.65rem',
+                          letterSpacing: '0.09em',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        Open Mail App
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {uploadState.error && (
               <div className="admin-card" style={{ borderColor: 'rgba(224, 0, 85, 0.4)', marginTop: '0.5rem' }}>

@@ -147,7 +147,10 @@ router.post('/checkout', async (req, res) => {
           currency: 'usd',
           product_data: {
             name: match.name,
-            description: match.description
+            description: match.description,
+            metadata: {
+              templateId: String(match._id)
+            }
           },
           unit_amount: unitAmount
         }
@@ -244,6 +247,144 @@ router.get('/delivery/:sessionId', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ message: 'Could not load delivery details', error: err.message });
+  }
+});
+
+// GET /api/templates/admin/sales - Sales summary by template (admin)
+router.get('/admin/sales', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.json({
+        data: [],
+        summary: {
+          paidSessions: 0,
+          totalUnitsSold: 0,
+          totalRevenue: 0,
+          topSeller: null
+        },
+        message: 'Stripe is not configured. Add STRIPE_SECRET_KEY to enable sales analytics.'
+      });
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const templates = await Template.find({}).lean();
+
+    const templatesById = new Map(templates.map((t) => [String(t._id), t]));
+    const templatesByName = new Map(
+      templates.map((t) => [String(t.name || '').trim().toLowerCase(), t])
+    );
+
+    const paidSessions = [];
+    let startingAfter;
+
+    // Walk all checkout sessions to build complete aggregate stats.
+    while (true) {
+      const page = await stripe.checkout.sessions.list({
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {})
+      });
+
+      const qualifying = (page.data || []).filter(
+        (session) => session.mode === 'payment' && session.payment_status === 'paid'
+      );
+      paidSessions.push(...qualifying);
+
+      if (!page.has_more || !(page.data || []).length) break;
+      startingAfter = page.data[page.data.length - 1].id;
+    }
+
+    const aggregated = new Map();
+
+    for (const session of paidSessions) {
+      let sessionLineItems = [];
+      let lineItemsStartingAfter;
+
+      while (true) {
+        const lineItemsPage = await stripe.checkout.sessions.listLineItems(session.id, {
+          limit: 100,
+          ...(lineItemsStartingAfter ? { starting_after: lineItemsStartingAfter } : {})
+        });
+
+        sessionLineItems.push(...(lineItemsPage.data || []));
+
+        if (!lineItemsPage.has_more || !(lineItemsPage.data || []).length) break;
+        lineItemsStartingAfter = lineItemsPage.data[lineItemsPage.data.length - 1].id;
+      }
+
+      for (const line of sessionLineItems) {
+        const quantity = Math.max(1, Number(line.quantity) || 1);
+        const revenue = Number(line.amount_total || 0) / 100;
+        const description = String(line.description || '').trim();
+        const normalizedDescription = description.toLowerCase();
+
+        const matchedTemplate = templatesByName.get(normalizedDescription) || null;
+        const templateId = matchedTemplate ? String(matchedTemplate._id) : `unknown:${normalizedDescription || 'item'}`;
+
+        const baseline = aggregated.get(templateId) || {
+          templateId: matchedTemplate ? String(matchedTemplate._id) : null,
+          name: matchedTemplate?.name || description || 'Unknown template',
+          slug: matchedTemplate?.slug || '',
+          category: matchedTemplate?.category || 'uncategorized',
+          soldCount: 0,
+          orders: new Set(),
+          revenue: 0,
+          lastSoldAt: null
+        };
+
+        baseline.soldCount += quantity;
+        baseline.orders.add(String(session.id));
+        baseline.revenue += revenue;
+
+        const soldAt = session.created ? new Date(session.created * 1000) : null;
+        if (soldAt && (!baseline.lastSoldAt || soldAt > baseline.lastSoldAt)) {
+          baseline.lastSoldAt = soldAt;
+        }
+
+        if (!matchedTemplate && description) {
+          const fallbackTemplate = templatesById.get(templateId);
+          if (fallbackTemplate) {
+            baseline.name = fallbackTemplate.name;
+            baseline.slug = fallbackTemplate.slug;
+            baseline.category = fallbackTemplate.category;
+          }
+        }
+
+        aggregated.set(templateId, baseline);
+      }
+    }
+
+    const data = Array.from(aggregated.values())
+      .map((row) => ({
+        templateId: row.templateId,
+        name: row.name,
+        slug: row.slug,
+        category: row.category,
+        soldCount: row.soldCount,
+        orderCount: row.orders.size,
+        revenue: Number(row.revenue.toFixed(2)),
+        lastSoldAt: row.lastSoldAt ? row.lastSoldAt.toISOString() : null
+      }))
+      .sort((a, b) => b.soldCount - a.soldCount || b.revenue - a.revenue);
+
+    const summary = data.reduce(
+      (acc, item) => {
+        acc.totalUnitsSold += item.soldCount;
+        acc.totalRevenue += item.revenue;
+        return acc;
+      },
+      {
+        paidSessions: paidSessions.length,
+        totalUnitsSold: 0,
+        totalRevenue: 0,
+        topSeller: data[0] || null
+      }
+    );
+
+    summary.totalRevenue = Number(summary.totalRevenue.toFixed(2));
+
+    res.json({ data, summary });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not load template sales analytics', error: err.message });
   }
 });
 
